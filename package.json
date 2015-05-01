@@ -1,0 +1,25 @@
+{
+  "name": "jsynth-sample-view",
+  "version": "0.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "abre": "^0.5.0",
+    "brfs": "^1.4.0",
+    "dom-event": "0.0.5",
+    "drag-drop": "^2.1.0",
+    "frequency-viewer": "^0.1.0",
+    "getids": "^0.2.0",
+    "jbuffers": "^1.3.0",
+    "jsynth-file-sample": "^1.1.0",
+    "jsynth-waveform": "^1.1.0",
+    "page-bus": "^2.1.0",
+    "touchdown": "^5.6.0",
+    "webworkify": "^1.0.2"
+  }
+}

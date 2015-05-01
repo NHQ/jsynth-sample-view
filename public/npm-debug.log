@@ -1,0 +1,21 @@
+0 info it worked if it ends with ok
+1 verbose cli [ '/usr/local/bin/node',
+1 verbose cli   '/usr/local/bin/npm',
+1 verbose cli   'version',
+1 verbose cli   'minor' ]
+2 info using npm@1.4.21
+3 info using node@v0.10.30
+4 error version No package.json found
+5 error Error: ENOENT, open '/home/johnny/projects/opa/public/package.json'
+6 error If you need help, you may report this *entire* log,
+6 error including the npm and node versions, at:
+6 error     <http://github.com/npm/npm/issues>
+7 error System Linux 3.13.0-35-generic
+8 error command "/usr/local/bin/node" "/usr/local/bin/npm" "version" "minor"
+9 error cwd /home/johnny/projects/opa/public
+10 error node -v v0.10.30
+11 error npm -v 1.4.21
+12 error path /home/johnny/projects/opa/public/package.json
+13 error code ENOENT
+14 error errno 34
+15 verbose exit [ 34, true ]
