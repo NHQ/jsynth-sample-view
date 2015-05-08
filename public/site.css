@@ -1,8 +1,9 @@
 .sample{
-  width:100%;
+  width:67%;
   height: 150px;
-  margin: 20px 0;
+  margin: 21px;
   padding: 0;
+  position:relative;
 }
 
 .sample canvas{

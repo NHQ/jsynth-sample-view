@@ -1,17 +1,12 @@
 html, body{
+  display:block;
   position:relative;
   height:100%;
   width:100%;
   padding:0;
   margin:0;
 }
-
-#markup{
-  position:relative;
-  height:100%;
-  width:100%;
-
-}
+script{display:none}
 ::-webkit-input-placeholder{
     font-weight:900;
 }

@@ -18,6 +18,8 @@ module.exports = function(parent){
     //canvas.style.left = '0px'
     index.splice(zIndex, 0, canvas)
     parent.appendChild(canvas)
+    var ctx = canvas.getContext('2d')
+    ctx.translate(.5, .5)
     return canvas
   }
 

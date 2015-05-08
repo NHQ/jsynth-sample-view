@@ -1,15 +1,15 @@
 var waveformer = require('jsynth-waveform');
 var installCanvas = require('./install-canvas')
-var touchdown = require('touchdown')
 var emitter = require('events').EventEmitter
-var on = require('dom-event')
+var inherits = require('inherits')
 
 module.exports = draw
+inherits(draw, emitter)
 
 function draw(parent, master){ 
   if(!(this instanceof draw)) return new draw(parent, master)
-  console.log(this)
   emitter.call(this)
+  
   var self = this
   
   this.parent = parent
@@ -21,8 +21,7 @@ function draw(parent, master){
     self.buffer = buf
     self.paintWave()
   }
-  this.setNeedle = setNeedle
-  this.shade = shade
+  this.setNeedles = setNeedles
   var l = this.layers = new Array(3)
   var install = installCanvas(parent)
   this.wave = install()
@@ -31,28 +30,32 @@ function draw(parent, master){
   l.push(this.needle)
   this.cover = install()
   l.push(this.cover)
-  
-  touchdown.start(parent)
-  on(parent, 'touchdown', self.setNeedle) 
+ 
+  // modes: play, seek, in, out
+  this.mode = 'play'
 
-  function shade(pts){
-    var canvas = this.cover
-  } 
-  
-  function setNeedle(evt, move){
+  // play modes: play, pause, seek(speed_curve)
+  this.playModes = 'pause'
+
+
+  // x offset for play time, seek, in point, and out point
+  this.needles = [-100, 0, this.cover.width, -100]
+
+  function setNeedles(){
     var canvas = self.needle
     var ctx = canvas.getContext('2d')
     var w = canvas.width
     var h = canvas.height
-    if(move){
-      ctx.clearRect(0,0,w,h)
-    }
-    ctx.strokeStyle = 'yellow' 
-    ctx.lineWidth = '3'
-    ctx.beginPath()
-    ctx.moveTo(evt.detail.offsetX, 0)
-    ctx.lineTo(evt.detail.offsetX, h)
-    ctx.stroke()
+    ctx.clearRect(0,0,w,h)
+    self.needles.forEach(function(n, i){
+      if(i === 0) ctx.strokeStyle = 'yellow'
+      else ctx.strokeStyle = 'blue'
+      ctx.lineWidth = '2'
+      ctx.beginPath()
+      ctx.moveTo(n, 0)
+      ctx.lineTo(n, h)
+      ctx.stroke()
+    })
   }
 
   function paintWave(){
@@ -60,7 +63,7 @@ function draw(parent, master){
     o.buffer = self.buffer
     o.canvas = self.wave
     o.sampleRate = self.sr
-    o.chunkSize = Math.floor(o.sampleRate / 12);
+    o.chunkSize = Math.floor(self.duration / 360 * o.sampleRate);
     o.positive = 'rgba(20,20,20,1)';
     o.negative = 'rgba(255,255,255,.1)'; // the default
     o.in = null; //default to 0
@@ -69,7 +72,6 @@ function draw(parent, master){
     o.height = self.wave.height
     o.y = 0
     o.x = 0;
-    console.log(o)
     waveformer(o);
   }
 }
