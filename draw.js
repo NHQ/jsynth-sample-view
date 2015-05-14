@@ -30,13 +30,6 @@ function draw(parent, master){
   l.push(this.needle)
   this.cover = install()
   l.push(this.cover)
- 
-  // modes: play, seek, in, out
-  this.mode = 'play'
-
-  // play modes: play, pause, seek(speed_curve)
-  this.playModes = 'pause'
-
 
   // x offset for play time, seek, in point, and out point
   this.needles = [-100, 0, this.cover.width, -100]
@@ -63,7 +56,7 @@ function draw(parent, master){
     o.buffer = self.buffer
     o.canvas = self.wave
     o.sampleRate = self.sr
-    o.chunkSize = Math.floor(self.duration / 360 * o.sampleRate);
+    o.chunkSize = Math.floor(self.duration / 720 * o.sampleRate);
     o.positive = 'rgba(20,20,20,1)';
     o.negative = 'rgba(255,255,255,.1)'; // the default
     o.in = null; //default to 0

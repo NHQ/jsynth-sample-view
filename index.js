@@ -3,6 +3,7 @@ var inherits = require('inherits')
 inherits(sampler, emitter)
 
 var fileBuff = require('jsynth-file-sample')
+var streamBuff = require('../jsynth-stream-buf')
 var on = require('dom-event')
 var touchdown = require('touchdown')
 var charcode = require('keycode')
@@ -18,7 +19,7 @@ document.body.removeChild(ui.sampletmp)
 
 module.exports = sampler 
 
-function sampler (master, buff, cb){
+function sampler (master, buff, parel, cb){
 
   if(!(this instanceof sampler)) return new sampler
 
@@ -27,129 +28,68 @@ function sampler (master, buff, cb){
   var self = this
   const sr = master.sampleRate 
 
+  parel = parel || document.body
   this.file = buff // try to keep original file around, maybe not 
   this.buff = buff
-  self.loop = true 
+  self.parent = ui.sampletmp.cloneNode(true)
+  parel.appendChild(self.parent)
+  self.looping = false
+  self.playing = false
+  self.paused = true
   self.epochStart = Date.now()
-  fileBuff(master, buff, function(e, source){
+  self.getTime = function(){
+    return master.currentTime - self.startTime + self.inPos
+  }
+  self.pause = function(){
     
+    console.log(self.source.currentTime)
+    self.pauseStart = self.source.currentTime; //self.getTime()
+    self.epochPauseStart = Date.now()
+    self.source.stop(0)
+    self.source.disconnect()
+    self.playing = false
+    self.paused = true
+  } 
+  self.loop = function(aye){
+    console.log('loop %s', aye)
+
+    self.looping = aye
+    self.source.loop = aye 
+  }
+  self.play = function(){
+    if(self.playing) {
+      self.source.stop(0)
+      self.source.disconnect()
+      fireSample(self.mono, self.inPos)
+    }
+    if(self.paused){
+      console.log(self.pauseStart)
+      fireSample(self.mono, self.pauseStart)
+    }
+  }
+  fileBuff(master, buff, function(e, source){
+    cb()
     var tracks = []
     for(var x = 0; x < source.buffer.numberOfChannels; x++){
       tracks.push(source.buffer.getChannelData(x))
     }
-    
     var mono = mergeTracks(tracks)
-    var parent = ui.sampletmp.cloneNode(true)
-    document.body.appendChild(parent)
-    touchdown.start(parent)
-    on(parent, 'touchdown', curseHandle) // handler down below... 
+    self.mono = mono
+    touchdown.start(self.parent)
+    on(self.parent, 'touchdown', curseHandle) // handler down below... 
     on(document,'keydown', function(evt){
       keydown(evt)
     })
-    
+    self.source = source  
+    self.source.loopStart = 0
+    self.source.loopEnd = source.buffer.duration
     //on(parent, 'deltavector', curseHandle) 
     
-    var paint = draw(parent, master)    
-    paint.setBuffer(mono)
+    self.paint = draw(self.parent, master)    
+    self.paint.setBuffer(mono)
     //source.start(0) 
     //source.connect(master.destination)
     self.duration = tracks[0].length / master.sampleRate
-    function fireSample(buf, pos){
-      pos = pos || 0
-      fileBuff(master, buf, function(e, s){
-        self.duration = s.buffer.duration
-        self.loopDuration = s.buffer.duration - (source.loopStart || pos)
-        self.goopDuration = s.buffer.duration - pos // for those out-of-loop restarts
-        self.inPos = pos
-        s.loop = self.loop
-        if(self.loop) {
-          s.loopStart = source.loopStart || pos
-          s.loopEnd = source.buffer.duration
-        }
-        s.onended = function(){
-          if(!(self.loop)) self.playing = false
-          else {
-            console.log('ended')
-            fireSample(buf, loop, pos)
-          }
-        }
-        self.epochStart = Date.now()
-        self.startTime = master.currentTime
-        self.timeOffset = -self.startTime + pos
-        self.currentTime = self.startTime + pos
-        source = s
-        s.connect(master.destination)
-        s.start(0, pos, Math.pow(2, 16))
-        moveNeedle(pos)
-        self.playing = true
-      })
-
-    }
-    function moveNeedle(pos){
-      window.requestAnimationFrame(function(){
-        if(!(self.inPos === source.loopStart)){
-          var t;
-          var elapsed = ((t = master.currentTime) - self.startTime) % self.goopDuration
-          if(source.loopStart <= elapsed + self.inPos){
-            self.startTime = t// source.loopStart - self.inPos
-            self.epochStart = Date.now()
-            self.inPos = source.loopStart
-            console.log('truwoowoowoo')
-          }
-          else{
-            paint.needles[0] = ((elapsed / self.duration) + (self.inPos / self.duration)) * parent.children[0].width 
-            paint.setNeedles()
-            if(self.playing) moveNeedle(pos)
-          }
-          //  click to start play somewheres outside of the loop
-          //  if the current play position is in between the loop, the original code should work
-          //  else some other calculation
-          //  remains to be known if this works for play start after loopEnd
-        
-        }        
-        else{
-          var elapsed = (master.currentTime - self.startTime) % self.loopDuration
-          self.currentTime = elapsed//(master.currentTime + self.timeOffset) % self.duration
-          paint.needles[0] = ((elapsed / self.duration) + (source.loopStart / self.duration)) * parent.children[0].width 
-          paint.setNeedles()
-          if(self.playing) moveNeedle(pos)
-        }
-      })
-    }
-
-    function keydown(evt){
-      var char = charcode(evt)
-      var timeIn = (evt.timeStamp - self.epochStart / 1000) % self.loopDuration || self.duration
-      if(char === 'i'){
-        if(self.playing) {
-          paint.needles[1] = paint.needles[0]
-          var epochlapsed = (evt.timeStamp - self.epochStart) / 1000
-          self.epochStart = evt.timeStamp
-          epochlapsed %= self.loopDuration
-//          var elapsed = (master.currentTime - self.startTime) % self.loopDuration
-          source.loopStart = epochlapsed + self.inPos//source.loopStart
-          self.inPos = source.loopStart
-          self.startTime = master.currentTime
-          self.loopDuration = source.buffer.duration - source.loopStart//epochlapsed//source.buffer.duration - source.loopStart
-          //source.disconnect()
-          //fireSample(mono, epochlapsed + self.inPos)
-        }
-      }
-      if(char === 'o'){
-        if(self.playing) paint.needles[2] = paint.needles[0]
-      
-      }
-    }
-
-    function curseHandle  (evt){
-      source.disconnect()
-      if(self.playing) source.stop(0)
-      var x = 0
-      fireSample(mono, x=  evt.detail.offsetX / parent.children[0].width * self.duration)
-      paint.needles[0] = evt.detail.offsetX
-      paint.setNeedles()    
-      paint.emit('something') // i'll be back
-    }
 
 //    freqency analysis experimentation.
 //    probably gonna find itself in its own module
@@ -181,6 +121,120 @@ function sampler (master, buff, cb){
 */
   })
 
+  function fireSample(buf, pos){
+    pos = pos || 0
+    self.inPos = pos
+    streamBuff(master, buf, function(e, s){
+      self.playing = true
+      self.paused = false
+      self.duration = s.buffer.duration
+      self.loopDuration = s.buffer.duration - (self.source.loopStart || pos)
+      self.goopDuration = s.buffer.duration - pos // for those out-of-loop restarts
+      s.loop = self.looping
+      s.loopStart = self.loop ? self.source.loopStart : pos 
+      s.loopEnd = self.source.loopEnd || self.source.buffer.duration
+      s.onended = function(){
+          console.log('ended')
+        if(!(self.loop)) self.playing = false
+        else {
+          fireSample(buf, pos)
+        }
+      }
+      self.epochStart = Date.now()
+      self.startTime = master.currentTime
+      self.timeOffset = -self.startTime + pos
+      self.currentTime = self.startTime + pos
+      self.source = s
+      s.connect(master.destination)
+      s.start(0, pos, Math.pow(2, 16))
+      moveNeedle(self.inPos)
+    })
+
+  }
+  function moveNeedle(pos){
+    window.requestAnimationFrame(function(){
+       if(true && self.playing){
+        var t = self.source.currentTime
+        self.paint.needles[0] = (t / self.duration) * self.parent.children[0].width
+        // ugly fix for animation glitch on pause then start
+        if(!isNaN(self.paint.needles[0])) self.paint.setNeedles()
+        if(self.playing) moveNeedle(pos)
+      }
+      /*
+      else if(!(self.inPos === self.source.loopStart)){
+        var t;
+        var elapsed = ((t = master.currentTime) - self.startTime) % self.goopDuration
+        if(self.source.loopStart <= elapsed + self.inPos){
+          self.startTime = t// source.loopStart - self.inPos
+          self.epochStart = Date.now()
+          self.inPos = self.source.loopStart
+          console.log('truwoowoowoo')
+        }
+        else{
+          self.paint.needles[0] = ((elapsed / self.duration) + (self.inPos / self.duration)) * self.parent.children[0].width 
+          self.paint.setNeedles()
+          if(self.playing) moveNeedle(pos)
+        }
+        //  click to start play somewheres outside of the loop
+        //  if the current play position is in between the loop, the original code should work
+        //  else some other calculation
+        //  remains to be known if this works for play start after loopEnd
+       
+      }        
+      else{
+        var elapsed = (master.currentTime - self.startTime) % self.loopDuration
+        self.currentTime = elapsed//(master.currentTime + self.timeOffset) % self.duration
+        self.paint.needles[0] = ((elapsed / self.duration) + (self.source.loopStart / self.duration)) * self.parent.children[0].width 
+        self.paint.setNeedles()
+        if(self.playing) moveNeedle(pos)
+      }
+      */
+    })
+  }
+
+  function keydown(evt){
+    var char = charcode(evt)
+    var timeIn = (evt.timeStamp - self.epochStart / 1000) % self.loopDuration || self.duration
+    if(char === 'i'){
+      if(self.playing) {
+        self.paint.needles[1] = self.paint.needles[0]
+        var epochlapsed = (evt.timeStamp - self.epochStart) / 1000
+        self.epochStart = evt.timeStamp
+        epochlapsed %= self.loopDuration
+//          var elapsed = (master.currentTime - self.startTime) % self.loopDuration
+        self.source.loopStart = self.source.currentTime//epochlapsed + self.inPos//source.loopStart
+        self.inPos = self.source.loopStart
+        self.startTime = master.currentTime
+        self.loop(true)
+        self.loopDuration = self.source.buffer.duration - self.source.loopStart//epochlapsed//source.buffer.duration - source.loopStart
+        //source.disconnect()
+        //fireSample(mono, epochlapsed + self.inPos)
+      }
+    }
+    if(char === 'o'){
+      if(self.playing) {
+        self.paint.needles[2] = self.paint.needles[0]
+        var epochlapsed = (evt.timeStamp - self.epochStart) / 1000
+        //self.epochStart = evt.timeStamp
+        epochlapsed %= self.loopDuration
+//          var elapsed = (master.currentTime - self.startTime) % self.loopDuration
+        self.source.loopEnd = self.source.currentTime//epochlapsed + self.inPos//source.loopStart
+        self.outPos = self.source.loopStart
+        //self.startTime = master.currentTime
+        self.loopDuration = self.source.loopEnd - self.source.loopStart//epochlapsed//source.buffer.duration - source.loopStart
+      }
+    }
+  }
+
+  function curseHandle  (evt){
+    self.source.disconnect()
+    if(self.playing) self.source.stop(0)
+    var x = 0
+    fireSample(self.mono, x=  evt.detail.offsetX / self.parent.children[0].width * self.duration)
+    self.paint.needles[0] = evt.detail.offsetX
+    self.paint.setNeedles()    
+    self.paint.emit('something') // i'll be back
+  }
 
   function trash(_track, div, ac, offset){
     var track = new Float32Array(Math.floor(_track.length / div))

@@ -1,9 +1,33 @@
+.sample-container{
+  width:100%;
+  position:relative;
+  height: 171px;
+}
 .sample{
   width:67%;
   height: 150px;
-  margin: 21px;
+  margin: 0;
   padding: 0;
-  position:relative;
+  position:absolute;
+  top: 21px;
+  left: 21px;
+}
+
+.ctrlbox{
+  width: 30%;
+  height: 150px;
+  margin: 0;
+  position:absolute;
+  top:21px;
+  right: 11px;
+}
+.ctrlbox button{
+  height: 50%;
+  margin: 0;
+  width: 24%;
+  display:inline-block;
+  font-size: 25px;
+  font-weight: 200;
 }
 
 .sample canvas{
@@ -14,4 +38,9 @@
   position:absolute;
   top: 0;
   left:0;
+}
+
+.reverse{
+  transform: rotateY(180deg);
+  -webkit-transform: rotateY(180deg);
 }
