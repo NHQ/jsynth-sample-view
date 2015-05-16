@@ -40,6 +40,9 @@ function createSample(buff){
   var ui = uis(ctrl)
   var loop = 0 
   for(var el in ui) touchdown.start(ui[el])
+  on(ui.speed, 'input', function(e){
+    sample.playbackRate = sample.source.playbackRate = e.target.valueAsNumber
+  })
   on(ui.$play, 'touchdown', function(e){
     sample.play()
 //    sample.emit('play')
@@ -53,8 +56,9 @@ function createSample(buff){
 //    sample.emit('pause')
   })
   on(ui.$slice, 'touchdown', function(e){
-//    var cut = sample.slice('slice')
-//    samples.push(cut)
+    var cut = sample.slice()
+    var _sample = createSample(cut)
+    samples.push(cut)
   })
   return sample
 }

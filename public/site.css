@@ -1,7 +1,7 @@
 .sample-container{
   width:100%;
   position:relative;
-  height: 171px;
+  height: 242px;
 }
 .sample{
   width:67%;
@@ -15,19 +15,76 @@
 
 .ctrlbox{
   width: 30%;
-  height: 150px;
+  height: 225px;
   margin: 0;
   position:absolute;
   top:21px;
   right: 11px;
 }
 .ctrlbox button{
-  height: 50%;
+  height: 33%;
   margin: 0;
   width: 24%;
   display:inline-block;
   font-size: 25px;
   font-weight: 200;
+}
+.ctrlbox input[type=range]{
+  height:20%;
+  width: 97%;
+  margin;0 ;
+  padding:0;
+}
+.ctrlbox input[type=range]:first-of-type{
+  margin:21px 0 0 0; 
+}
+
+input[type=range]{
+  -webkit-appearance:none;
+  margin: 11px 0;
+  width:100%;
+}
+input[type=range]:focus{
+  outline:none;
+}
+
+input[type=range]::-webkit-slider-runnable-track{
+  width:100%;
+  height: 11px;
+  cursor:pointer;
+  animate: 0.2s;
+  background: #ccc;
+  border: 0px solid black;
+}
+
+input[type=range]::-webkit-slider-thumb{
+  margin: -11px 0 0 0;
+  width:100px;
+  height:40px;
+  border: 0px solid black;
+  -webkit-appearance:none;
+}
+input[id=speed]::-webkit-slider-thumb::before{
+  content: "speed";
+  font-size:22px;
+  color:#111;
+  background:#ccc;
+  padding: 5px 11px 5px;
+  -webkit-appearance:none;
+}
+input[id=seek]::-webkit-slider-thumb::before{
+  content: "seek";
+  color:#111;
+  font-size:22px;
+  background:#ccc;
+  padding: 5px 11px 5px;
+}
+input[id=shift]::-webkit-slider-thumb:before{
+  content: "shift";
+  font-size:22px;
+  color:#111;
+  padding: 5px 11px 5px;
+  background:#ccc;
 }
 
 .sample canvas{

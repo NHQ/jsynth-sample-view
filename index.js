@@ -36,6 +36,7 @@ function sampler (master, buff, parel, cb){
   self.looping = false
   self.playing = false
   self.paused = true
+  self.playbackRate = 1
   self.epochStart = Date.now()
   self.getTime = function(){
     return master.currentTime - self.startTime + self.inPos
@@ -66,6 +67,11 @@ function sampler (master, buff, parel, cb){
       console.log(self.pauseStart)
       fireSample(self.mono, self.pauseStart)
     }
+  }
+  self.slice = function(i,o){
+    i = i || self.source._loopStart || 0 
+    o = o || self.source._loopEnd || self.source.buffer.length - 1
+    return new Float32Array(self.mono.buffer.slice(i * 4, o * 4))
   }
   fileBuff(master, buff, function(e, source){
     cb()
@@ -130,6 +136,8 @@ function sampler (master, buff, parel, cb){
       self.duration = s.buffer.duration
       self.loopDuration = s.buffer.duration - (self.source.loopStart || pos)
       self.goopDuration = s.buffer.duration - pos // for those out-of-loop restarts
+      s.playbackRate = self.playbackRate || 1
+      console.log(self.playbackRate, s.playbackRate)
       s.loop = self.looping
       s.loopStart = self.loop ? self.source.loopStart : pos 
       s.loopEnd = self.source.loopEnd || self.source.buffer.duration
@@ -154,7 +162,7 @@ function sampler (master, buff, parel, cb){
   function moveNeedle(pos){
     window.requestAnimationFrame(function(){
        if(true && self.playing){
-        var t = self.source.currentTime
+        var t = self.source.currentTime //* self.source.playbackRate
         self.paint.needles[0] = (t / self.duration) * self.parent.children[0].width
         // ugly fix for animation glitch on pause then start
         if(!isNaN(self.paint.needles[0])) self.paint.setNeedles()

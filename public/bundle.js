@@ -5009,7 +5009,7 @@ var ready = require('doc-ready')
 var sampler = require('./')
 var context = new AudioContext
 
-var ctrls = "<div id=ctrls class=ctrlbox>\n  <button id=$play class=play>&gt</button>\n  <button id=$pause class=pause>||</button>\n  <button id=$playloop class=playloop>|&#8212&gt</button>\n  <button id=$loop class=loop><span style=\"font-size:100%;line-height:0\">&#9775</span></button>\n  <button id=$setin class=setin>&#254&#8212</button>\n  <button id=$setout class=\"setout reverse\"><span sytyle=\"font-size:300%\">&#254</span>&#8212</button>\n  <button id=$slice class=slice>8&lt--</button>\n  <button id=$reverse class=reverse>R</button>\n</div>\n"
+var ctrls = "<div id=ctrls class=ctrlbox>\n  <button id=$play class=play>&gt</button>\n  <button id=$pause class=pause>||</button>\n  <button id=$playloop class=playloop>|&#8212&gt</button>\n  <button id=$loop class=loop><span style=\"font-size:100%;line-height:0\">&#9775</span></button>\n  <button id=$setin class=setin>&#254&#8212</button>\n  <button id=$setout class=\"setout reverse\"><span sytyle=\"font-size:300%\">&#254</span>&#8212</button>\n  <button id=$slice class=slice>8&lt--</button>\n  <button id=$reverse class=reverse>R</button>\n  <input type=range min=0 max=2 value=1 step=.01 id=speed></input>\n  <input type=range min=-1 max=1 value=0 step=.01 id=seek></input>\n  <input type=range min=-1 max=1 value=0 step=.01 id=shift></input>\n</div>\n"
 var div = document.createElement('div')
 div.innerHTML = ctrls
 ctrls = div.firstChild
@@ -5040,6 +5040,9 @@ function createSample(buff){
   var ui = uis(ctrl)
   var loop = 0 
   for(var el in ui) touchdown.start(ui[el])
+  on(ui.speed, 'input', function(e){
+    sample.playbackRate = sample.source.playbackRate = e.target.valueAsNumber
+  })
   on(ui.$play, 'touchdown', function(e){
     sample.play()
 //    sample.emit('play')
@@ -5053,8 +5056,9 @@ function createSample(buff){
 //    sample.emit('pause')
   })
   on(ui.$slice, 'touchdown', function(e){
-//    var cut = sample.slice('slice')
-//    samples.push(cut)
+    var cut = sample.slice()
+    var _sample = createSample(cut)
+    samples.push(cut)
   })
   return sample
 }
@@ -5098,6 +5102,7 @@ function sampler (master, buff, parel, cb){
   self.looping = false
   self.playing = false
   self.paused = true
+  self.playbackRate = 1
   self.epochStart = Date.now()
   self.getTime = function(){
     return master.currentTime - self.startTime + self.inPos
@@ -5128,6 +5133,11 @@ function sampler (master, buff, parel, cb){
       console.log(self.pauseStart)
       fireSample(self.mono, self.pauseStart)
     }
+  }
+  self.slice = function(i,o){
+    i = i || self.source._loopStart || 0 
+    o = o || self.source._loopEnd || self.source.buffer.length - 1
+    return new Float32Array(self.mono.buffer.slice(i * 4, o * 4))
   }
   fileBuff(master, buff, function(e, source){
     cb()
@@ -5192,6 +5202,8 @@ function sampler (master, buff, parel, cb){
       self.duration = s.buffer.duration
       self.loopDuration = s.buffer.duration - (self.source.loopStart || pos)
       self.goopDuration = s.buffer.duration - pos // for those out-of-loop restarts
+      s.playbackRate = self.playbackRate || 1
+      console.log(self.playbackRate, s.playbackRate)
       s.loop = self.looping
       s.loopStart = self.loop ? self.source.loopStart : pos 
       s.loopEnd = self.source.loopEnd || self.source.buffer.duration
@@ -5216,7 +5228,7 @@ function sampler (master, buff, parel, cb){
   function moveNeedle(pos){
     window.requestAnimationFrame(function(){
        if(true && self.playing){
-        var t = self.source.currentTime
+        var t = self.source.currentTime //* self.source.playbackRate
         self.paint.needles[0] = (t / self.duration) * self.parent.children[0].width
         // ugly fix for animation glitch on pause then start
         if(!isNaN(self.paint.needles[0])) self.paint.setNeedles()
@@ -8315,13 +8327,18 @@ module.exports = function(master, _buffer, cb, size){
 
   if(_buffer) buffer.push(_buffer)
   
-  var offset = 0, start = 0, end = 0, total = 0
+  var offset = 0, start = 0, end = 0, total = 0, pbroffset = 0
 
   const sr = master.sampleRate
 
   var source = jsynth(master, function(t, s, i){
  
-    if(!source.playing){
+   var _s = s
+   
+   s = Math.floor(s * source._playbackRate) + pbroffset // source.playbackRate
+   t = s / sr
+
+   if(!source.playing){
       if(total === start) {
         source.resetIndex(offset)
         source.playing = true
@@ -8334,10 +8351,14 @@ module.exports = function(master, _buffer, cb, size){
 
     
     else if(source._loop){
-      if(s === source._loopEnd || s === buffer.length - 1) {
-        source.resetIndex(source._loopStart)
-        s = source._loopStart
-        t = s / sr
+      if(s >= source._loopEnd || s >= buffer.length - 1) {
+        var np = source._loopStart * source._playbackRate
+        var dif = source._loopEnd - np
+        pbroffset = 0//-source._loopEnd - source._loopStart //0//-Math.floor(dif)
+        s = Math.floor(source._loopStart / source._playbackRate)//xx - pbroffset // / source._playbackRate) 
+        console.log(s, pbroffset, self._loopStart)
+       // t = s / sr 
+        source.resetIndex(s)
       }
     }
     
@@ -8367,11 +8388,26 @@ module.exports = function(master, _buffer, cb, size){
     return buffer.toBuffer()
   }
 
+  source.currentTime = 0
   source.playing = false
   source._loop = true 
   source._loopStart = 0
   source._loopEnd = buffer.length - 1
+  source._playbackRate = 1
   source.buffer = buffer.toBuffer()
+  source.buffer.duration = buffer.length / sr
+    Object.defineProperty(source, 'playbackRate', {
+      set: function(x){
+        x = Number(x) || 1
+        var np = this.currentTime * x
+        var dif = np - this.currentTime
+        pbroffset = 0//-Math.floor(dif * sr)
+        this['_playbackRate'] = x
+      },
+      get: function(){
+        return this['_playbackRate']
+      }
+    })
   source.buffer.duration = buffer.length / sr
     Object.defineProperty(source, 'loop', {
       set: function(x){
@@ -8386,6 +8422,7 @@ module.exports = function(master, _buffer, cb, size){
   props.forEach(function(e){
     Object.defineProperty(source, e, {
       set: function(x){
+        console.log(e, x)
         this['_' + e] = Math.ceil(x * sr) + 3 
         this.updateLoop(e, x)
       },
@@ -8409,11 +8446,14 @@ module.exports = function(master, _buffer, cb, size){
   source.stop = function(when){
     end = total + Math.floor(Math.max(0, (when || 0)) * sr)    
   }
-
+  var self = source
   source.start = function(when, where, dur){
     start = Math.floor((when || 0) * sr)
     offset = Math.floor((where || 0) * sr)
     end = (!isNaN(dur)) ? Math.floor(dur * sr) : buffer.length 
+        var np = where * source.playbackRate
+        var dif = np - where 
+        pbroffset = -Math.floor(dif * sr)
     source.resetIndex(offset)
     source.resetTime(where)
     end += start
