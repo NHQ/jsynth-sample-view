@@ -4,6 +4,7 @@ inherits(sampler, emitter)
 
 var fileBuff = require('jsynth-file-sample')
 var streamBuff = require('../jsynth-stream-buf')
+var pitcher = require('../jsynth-pitch-shift')
 var on = require('dom-event')
 var touchdown = require('touchdown')
 var charcode = require('keycode')
@@ -15,18 +16,26 @@ var ui = require('getids')(document.body)
 //window.name = 'master'
 //var worker = work(require('./fft.js'), 'jsynth', ['width=0,height=0,menubar=no,scrollbars=no'])
 
+
 document.body.removeChild(ui.sampletmp)
 
 module.exports = sampler 
 
 function sampler (master, buff, parel, cb){
 
-  if(!(this instanceof sampler)) return new sampler
+  if(!(this instanceof sampler)) return new sampler(master, buff, parel, cb)
 
   emitter.call(this)
 
   var self = this
   const sr = master.sampleRate 
+
+
+  var pitchNode = pitcher(master, function(t){
+    return pitchFn(t)
+  })
+
+  function pitchFn(t){return self.pitch}
 
   parel = parel || document.body
   this.file = buff // try to keep original file around, maybe not 
@@ -36,14 +45,37 @@ function sampler (master, buff, parel, cb){
   self.looping = false
   self.playing = false
   self.paused = true
+  self.reversed = false
+  self.pitch = 1
+  self.pitched = false
   self.playbackRate = 1
   self.epochStart = Date.now()
   self.getTime = function(){
     return master.currentTime - self.startTime + self.inPos
   }
+  
+  self.amplitude = function(x){
+    self.source.gain = x
+  }
+  self.setPitch = function(x){
+    self.pitch = x
+    if(!self.pitched){
+      self.source.disconnect(master.destination)
+      self.source.connect(pitchNode)
+      pitchNode.connect(master.destination)
+    }
+  }
+  self.speed = function(x){
+    self.source.playbackRate = x
+  }
+  self.reverse = function(){
+    self.reversed = !self.reversed
+    self.source.reverse()
+    var action = self.reversed ? 'add' : 'remove'
+    self.paint.parent.children[0].classList[action]('reverse')
+  }
+
   self.pause = function(){
-    
-    console.log(self.source.currentTime)
     self.pauseStart = self.source.currentTime; //self.getTime()
     self.epochPauseStart = Date.now()
     self.source.stop(0)
@@ -52,11 +84,10 @@ function sampler (master, buff, parel, cb){
     self.paused = true
   } 
   self.loop = function(aye){
-    console.log('loop %s', aye)
-
     self.looping = aye
     self.source.loop = aye 
   }
+
   self.play = function(){
     if(self.playing) {
       self.source.stop(0)
@@ -64,14 +95,25 @@ function sampler (master, buff, parel, cb){
       fireSample(self.mono, self.inPos)
     }
     if(self.paused){
-      console.log(self.pauseStart)
       fireSample(self.mono, self.pauseStart)
     }
   }
   self.slice = function(i,o){
     i = i || self.source._loopStart || 0 
     o = o || self.source._loopEnd || self.source.buffer.length - 1
-    return new Float32Array(self.mono.buffer.slice(i * 4, o * 4))
+    return new Float32Array(self.source.getBuffer().buffer.slice(i * 4, o * 4))
+  }
+  self.setIn = function(){ 
+    self.paint.needles[1] = self.paint.needles[0]
+    self.source.loopStart = self.source.currentTime//epochlapsed + self.inPos//source.loopStart
+    self.inPos = self.source.loopStart
+    self.loopDuration = self.source.loopEnd - self.source.loopStart//epochlapsed//source.buffer.duration - source.loopStart
+  }
+  self.setOut = function(){ 
+    self.paint.needles[2] = self.paint.needles[0]
+    self.source.loopEnd = self.source.currentTime//epochlapsed + self.inPos//source.loopStart
+    self.outPos = self.source.loopStart
+    self.loopDuration = self.source.loopEnd - self.source.loopStart//epochlapsed//source.buffer.duration - source.loopStart
   }
   fileBuff(master, buff, function(e, source){
     cb()
@@ -133,11 +175,11 @@ function sampler (master, buff, parel, cb){
     streamBuff(master, buf, function(e, s){
       self.playing = true
       self.paused = false
+      self.mono = s.getBuffer()
       self.duration = s.buffer.duration
       self.loopDuration = s.buffer.duration - (self.source.loopStart || pos)
       self.goopDuration = s.buffer.duration - pos // for those out-of-loop restarts
       s.playbackRate = self.playbackRate || 1
-      console.log(self.playbackRate, s.playbackRate)
       s.loop = self.looping
       s.loopStart = self.loop ? self.source.loopStart : pos 
       s.loopEnd = self.source.loopEnd || self.source.buffer.duration
@@ -153,6 +195,10 @@ function sampler (master, buff, parel, cb){
       self.timeOffset = -self.startTime + pos
       self.currentTime = self.startTime + pos
       self.source = s
+      if(self.reversed) {
+        self.reversed = false
+        self.reverse()
+      }
       s.connect(master.destination)
       s.start(0, pos, Math.pow(2, 16))
       moveNeedle(self.inPos)
@@ -203,32 +249,22 @@ function sampler (master, buff, parel, cb){
   function keydown(evt){
     var char = charcode(evt)
     var timeIn = (evt.timeStamp - self.epochStart / 1000) % self.loopDuration || self.duration
+    if(!self.selected) return
     if(char === 'i'){
       if(self.playing) {
         self.paint.needles[1] = self.paint.needles[0]
-        var epochlapsed = (evt.timeStamp - self.epochStart) / 1000
-        self.epochStart = evt.timeStamp
-        epochlapsed %= self.loopDuration
-//          var elapsed = (master.currentTime - self.startTime) % self.loopDuration
         self.source.loopStart = self.source.currentTime//epochlapsed + self.inPos//source.loopStart
         self.inPos = self.source.loopStart
         self.startTime = master.currentTime
+        self.loopDuration = self.source.loopEnd - self.source.loopStart//epochlapsed//source.buffer.duration - source.loopStart
         self.loop(true)
-        self.loopDuration = self.source.buffer.duration - self.source.loopStart//epochlapsed//source.buffer.duration - source.loopStart
-        //source.disconnect()
-        //fireSample(mono, epochlapsed + self.inPos)
       }
     }
     if(char === 'o'){
       if(self.playing) {
         self.paint.needles[2] = self.paint.needles[0]
-        var epochlapsed = (evt.timeStamp - self.epochStart) / 1000
-        //self.epochStart = evt.timeStamp
-        epochlapsed %= self.loopDuration
-//          var elapsed = (master.currentTime - self.startTime) % self.loopDuration
         self.source.loopEnd = self.source.currentTime//epochlapsed + self.inPos//source.loopStart
         self.outPos = self.source.loopStart
-        //self.startTime = master.currentTime
         self.loopDuration = self.source.loopEnd - self.source.loopStart//epochlapsed//source.buffer.duration - source.loopStart
       }
     }

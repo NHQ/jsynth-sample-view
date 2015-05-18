@@ -72,15 +72,15 @@ input[id=speed]::-webkit-slider-thumb::before{
   padding: 5px 11px 5px;
   -webkit-appearance:none;
 }
-input[id=seek]::-webkit-slider-thumb::before{
-  content: "seek";
+input[id=amplitude]::-webkit-slider-thumb::before{
+  content: "amplitude";
   color:#111;
   font-size:22px;
   background:#ccc;
   padding: 5px 11px 5px;
 }
-input[id=shift]::-webkit-slider-thumb:before{
-  content: "shift";
+input[id=pitch]::-webkit-slider-thumb:before{
+  content: "pitch";
   font-size:22px;
   color:#111;
   padding: 5px 11px 5px;
