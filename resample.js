@@ -8,7 +8,6 @@ var hop = 256
 module.exports = function(sr, buf, params){
 
   if(!(sr === params.sampleRate) && params.sampleRate) {
-    console.log('samplerate') 
     var resample = new Resample(sr, params.sampleRate, 1, buf.length * sr / params.sampleRate)
     var buf = resample.resampler(buf)
     sr = params.sampleRate
@@ -16,7 +15,6 @@ module.exports = function(sr, buf, params){
   
   if(!(params.pitch === 1) && params.pitch){
 
-    console.log('pitch', params.pitch) 
     var queue = jbuffers(6)
     var q = 1, e = Math.floor(buf.length / frame_size)
     var shifter = shift(function(data){
@@ -40,17 +38,16 @@ module.exports = function(sr, buf, params){
 
   }
   if(!(params.amplitude === 1) && params.amplitude){
-    console.log('amp') 
     buf = amp(buf, params.amplitude)
   }
 
   if(!(params.speed === 1) && params.speed){
-    console.log('speed') 
     //buf = thrash(buf, params.speed)
     //  not ideal but should work for now
-    var resample = new Resample(sr, sr / params.speed, 1, buf.length / params.speed)
-    var buf = resample.resampler(buf)
-    sr = params.sampleRate
+//    var resample = new Resample(sr, sr / params.speed, 1, buf.length / params.speed)
+//    var buf = resample.resampler(buf)
+//    sr = params.sampleRate
+    buf = speed(buf, params.speed)
   }
   
   return buf
@@ -71,6 +68,14 @@ function thrash(_track, div, ac, offset){
     tt.set(track, offset || 0)
     return tt
   }else return track 
+}
+
+function speed(buf, s){
+  var nb = new Float32Array(Math.floor(buf.length / s))
+  for(var x = 0; x < nb.length; x++){
+    nb[x] = nb[x] + buf[Math.floor(x * s)]
+  }
+  return nb
 }
 
 function amp(buf, a){

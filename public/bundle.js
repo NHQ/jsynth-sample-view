@@ -12253,7 +12253,7 @@ function draw(parent, master){
   }
 }
 
-},{"./install-canvas":61,"events":6,"inherits":78,"jsynth-waveform":81}],59:[function(require,module,exports){
+},{"./install-canvas":61,"events":6,"inherits":78,"jsynth-waveform":83}],59:[function(require,module,exports){
 var on = require('dom-event')
 
 var nb = require('../nbfs') // note-bene
@@ -12264,7 +12264,7 @@ var touchdown = require('touchdown')
 var drop = require('drag-drop/buffer')
 var ready = require('doc-ready')
 var hover = require('../mousearound')
-var resample = require('./resample.js')
+var resample = require('jsynth-resampler')
 
 var sampler = require('./')
 var context = new AudioContext
@@ -12339,7 +12339,7 @@ function createSample(buff){
   return sample
 }
 
-},{"../mousearound":131,"../nbfs":134,"./":60,"./resample.js":115,"doc-ready":62,"dom-event":64,"drag-drop/buffer":65,"getids":77,"touchdown":113}],60:[function(require,module,exports){
+},{"../mousearound":133,"../nbfs":136,"./":60,"doc-ready":62,"dom-event":64,"drag-drop/buffer":65,"getids":77,"jsynth-resampler":81,"touchdown":115}],60:[function(require,module,exports){
 var emitter = require('events').EventEmitter
 var inherits = require('inherits')
 inherits(sampler, emitter)
@@ -12535,10 +12535,8 @@ function sampler (master, buff, parel, cb){
       s.loopStart = self.loop ? self.source.loopStart : pos 
       s.loopEnd = self.source.loopEnd || self.source.buffer.duration
       s.playbackRate= self.playbackRate
-      self.amplitude(self.source.gain) 
       s.onended = function(){
-
-          console.log('ended')
+        console.log('ended')
         if(!(self.loop)) self.playing = false
         else {
           fireSample(buf, pos)
@@ -12548,7 +12546,9 @@ function sampler (master, buff, parel, cb){
       self.startTime = master.currentTime
       self.timeOffset = -self.startTime + pos
       self.currentTime = self.startTime + pos
+      var g = self.source.gain || 1
       self.source = s;
+      self.amplitude(g) 
       if(self.reversed) {
         self.reversed = false
         self.reverse()
@@ -12670,7 +12670,7 @@ function sampler (master, buff, parel, cb){
 
 
 
-},{"../jsynth-pitch-shift":26,"../jsynth-stream-buf":117,"./draw":58,"./resample.js":115,"dom-event":64,"events":6,"getids":77,"inherits":78,"jbuffers":79,"jsynth-file-sample":80,"keycode":82,"touchdown":113}],61:[function(require,module,exports){
+},{"../jsynth-pitch-shift":26,"../jsynth-stream-buf":119,"./draw":58,"./resample.js":117,"dom-event":64,"events":6,"getids":77,"inherits":78,"jbuffers":79,"jsynth-file-sample":80,"keycode":84,"touchdown":115}],61:[function(require,module,exports){
 module.exports = function(parent){
   if(!parent) parent = document.body
   var index = []
@@ -14105,6 +14105,319 @@ module.exports = function(context, buff, cb){
 }
 
 },{}],81:[function(require,module,exports){
+var Resample = require('./resampler.js')
+var shift = require('pitch-shift')
+var jbuffers = require('jbuffers')
+var frame_size = 512 * 2
+var hop = 256 
+
+module.exports = function(sr, buf, params){
+
+  if(!(sr === params.sampleRate) && params.sampleRate) {
+    var resample = new Resample(sr, params.sampleRate, 1, buf.length * sr / params.sampleRate)
+    var buf = resample.resampler(buf)
+    sr = params.sampleRate
+  }
+  
+  if(!(params.pitch === 1) && params.pitch){
+
+    var queue = jbuffers(6)
+    var q = 1, e = Math.floor(buf.length / frame_size)
+    var shifter = shift(function(data){
+      var pusher = new Float32Array(frame_size)
+      pusher.set(data)
+      queue.push(pusher)
+
+    }, function(t){ return params.pitch}, {
+      frameSize: frame_size,
+      hopSize: hop,
+      sampleRate: sr,
+      freqThreshold: .9,
+      harmonicScale: .2
+    }) 
+  
+    for(var x = 0; x < e; x++){
+      shifter(new Float32Array(Array.prototype.slice.call(buf, x * frame_size, x * frame_size + frame_size)))
+    }
+ 
+    buf = queue.toBuffer()
+
+  }
+  if(!(params.amplitude === 1) && params.amplitude){
+    buf = amp(buf, params.amplitude)
+  }
+
+  if(!(params.speed === 1) && params.speed){
+    //buf = thrash(buf, params.speed)
+    //  not ideal but should work for now
+//    var resample = new Resample(sr, sr / params.speed, 1, buf.length / params.speed)
+//    var buf = resample.resampler(buf)
+//    sr = params.sampleRate
+    buf = speed(buf, params.speed)
+  }
+  
+  return buf
+}
+
+function thrash(_track, div, ac, offset){
+  var track = new Float32Array(Math.floor(_track.length / div))
+  for(var x = 0; x < track.length; x++){
+    var y = 0
+    for(var z = 0; z < div; z++){
+      y += _track[x * z]
+    }
+    track[x] = y / div
+  }
+  if(ac){
+    var tt = new Float32Array(Math.floor(_track.length / ac))
+    offset = tt.length * offset 
+    tt.set(track, offset || 0)
+    return tt
+  }else return track 
+}
+
+function speed(buf, s){
+  var nb = new Float32Array(Math.floor(buf.length / s))
+  for(var x = 0; x < nb.length; x++){
+    nb[x] = nb[x] + buf[Math.floor(x * s)]
+  }
+  return nb
+}
+
+function amp(buf, a){
+  Array.prototype.forEach.call(buf, function(e, i){
+    buf[i] = e * a
+  })
+  return buf
+}
+
+function mergeTracks(tracks, a){
+  a = a || 1
+  var track = new Float32Array(tracks[0].length)
+  for(var x = 0; x < track.length; x++){
+    var y = 0
+      for(var z = 0; z < tracks.length; z++){
+        y += tracks[z][x] 
+      }
+    track[x] = y / tracks.length * a
+  }
+  return track
+}
+
+},{"./resampler.js":82,"jbuffers":79,"pitch-shift":112}],82:[function(require,module,exports){
+//JavaScript Audio Resampler (c) 2011 - Grant Galitz
+module.exports = Resampler
+
+function Resampler(fromSampleRate, toSampleRate, channels, outputBufferSize, noReturn) {
+	this.fromSampleRate = fromSampleRate;
+	this.toSampleRate = toSampleRate;
+	this.channels = channels | 0;
+	this.outputBufferSize = outputBufferSize;
+	this.noReturn = !!noReturn;
+	this.initialize();
+}
+
+Resampler.prototype.initialize = function () {
+	//Perform some checks:
+	if (this.fromSampleRate > 0 && this.toSampleRate > 0 && this.channels > 0) {
+		if (this.fromSampleRate == this.toSampleRate) {
+			//Setup a resampler bypass:
+			this.resampler = this.bypassResampler;		//Resampler just returns what was passed through.
+			this.ratioWeight = 1;
+		}
+		else {
+			if (this.fromSampleRate < this.toSampleRate) {
+				/*
+					Use generic linear interpolation if upsampling,
+					as linear interpolation produces a gradient that we want
+					and works fine with two input sample points per output in this case.
+				*/
+				this.compileLinearInterpolationFunction();
+				this.lastWeight = 1;
+			}
+			else {
+				/*
+					Custom resampler I wrote that doesn't skip samples
+					like standard linear interpolation in high downsampling.
+					This is more accurate than linear interpolation on downsampling.
+				*/
+				this.compileMultiTapFunction();
+				this.tailExists = false;
+				this.lastWeight = 0;
+			}
+			this.ratioWeight = this.fromSampleRate / this.toSampleRate;
+			this.initializeBuffers();
+		}
+	}
+	else {
+		throw(new Error("Invalid settings specified for the resampler."));
+	}
+}
+Resampler.prototype.compileLinearInterpolationFunction = function () {
+	var toCompile = "var bufferLength = buffer.length;\
+	var outLength = this.outputBufferSize;\
+	if ((bufferLength % " + this.channels + ") == 0) {\
+		if (bufferLength > 0) {\
+			var ratioWeight = this.ratioWeight;\
+			var weight = this.lastWeight;\
+			var firstWeight = 0;\
+			var secondWeight = 0;\
+			var sourceOffset = 0;\
+			var outputOffset = 0;\
+			var outputBuffer = this.outputBuffer;\
+			for (; weight < 1; weight += ratioWeight) {\
+				secondWeight = weight % 1;\
+				firstWeight = 1 - secondWeight;";
+	for (var channel = 0; channel < this.channels; ++channel) {
+		toCompile += "outputBuffer[outputOffset++] = (this.lastOutput[" + channel + "] * firstWeight) + (buffer[" + channel + "] * secondWeight);";
+	}
+	toCompile += "}\
+			weight -= 1;\
+			for (bufferLength -= " + this.channels + ", sourceOffset = Math.floor(weight) * " + this.channels + "; outputOffset < outLength && sourceOffset < bufferLength;) {\
+				secondWeight = weight % 1;\
+				firstWeight = 1 - secondWeight;";
+	for (var channel = 0; channel < this.channels; ++channel) {
+		toCompile += "outputBuffer[outputOffset++] = (buffer[sourceOffset" + ((channel > 0) ? (" + " + channel) : "") + "] * firstWeight) + (buffer[sourceOffset + " + (this.channels + channel) + "] * secondWeight);";
+	}
+	toCompile += "weight += ratioWeight;\
+				sourceOffset = Math.floor(weight) * " + this.channels + ";\
+			}";
+	for (var channel = 0; channel < this.channels; ++channel) {
+		toCompile += "this.lastOutput[" + channel + "] = buffer[sourceOffset++];";
+	}
+	toCompile += "this.lastWeight = weight % 1;\
+			return this.bufferSlice(outputOffset);\
+		}\
+		else {\
+			return (this.noReturn) ? 0 : [];\
+		}\
+	}\
+	else {\
+		throw(new Error(\"Buffer was of incorrect sample length.\"));\
+	}";
+	this.resampler = Function("buffer", toCompile);
+}
+Resampler.prototype.compileMultiTapFunction = function () {
+	var toCompile = "var bufferLength = buffer.length;\
+	var outLength = this.outputBufferSize;\
+	if ((bufferLength % " + this.channels + ") == 0) {\
+		if (bufferLength > 0) {\
+			var ratioWeight = this.ratioWeight;\
+			var weight = 0;";
+	for (var channel = 0; channel < this.channels; ++channel) {
+		toCompile += "var output" + channel + " = 0;"
+	}
+	toCompile += "var actualPosition = 0;\
+			var amountToNext = 0;\
+			var alreadyProcessedTail = !this.tailExists;\
+			this.tailExists = false;\
+			var outputBuffer = this.outputBuffer;\
+			var outputOffset = 0;\
+			var currentPosition = 0;\
+			do {\
+				if (alreadyProcessedTail) {\
+					weight = ratioWeight;";
+	for (channel = 0; channel < this.channels; ++channel) {
+		toCompile += "output" + channel + " = 0;"
+	}
+	toCompile += "}\
+				else {\
+					weight = this.lastWeight;";
+	for (channel = 0; channel < this.channels; ++channel) {
+		toCompile += "output" + channel + " = this.lastOutput[" + channel + "];"
+	}
+	toCompile += "alreadyProcessedTail = true;\
+				}\
+				while (weight > 0 && actualPosition < bufferLength) {\
+					amountToNext = 1 + actualPosition - currentPosition;\
+					if (weight >= amountToNext) {";
+	for (channel = 0; channel < this.channels; ++channel) {
+		toCompile += "output" + channel + " += buffer[actualPosition++] * amountToNext;"
+	}
+	toCompile += "currentPosition = actualPosition;\
+						weight -= amountToNext;\
+					}\
+					else {";
+	for (channel = 0; channel < this.channels; ++channel) {
+		toCompile += "output" + channel + " += buffer[actualPosition" + ((channel > 0) ? (" + " + channel) : "") + "] * weight;"
+	}
+	toCompile += "currentPosition += weight;\
+						weight = 0;\
+						break;\
+					}\
+				}\
+				if (weight == 0) {";
+	for (channel = 0; channel < this.channels; ++channel) {
+		toCompile += "outputBuffer[outputOffset++] = output" + channel + " / ratioWeight;"
+	}
+	toCompile += "}\
+				else {\
+					this.lastWeight = weight;";
+	for (channel = 0; channel < this.channels; ++channel) {
+		toCompile += "this.lastOutput[" + channel + "] = output" + channel + ";"
+	}
+	toCompile += "this.tailExists = true;\
+					break;\
+				}\
+			} while (actualPosition < bufferLength && outputOffset < outLength);\
+			return this.bufferSlice(outputOffset);\
+		}\
+		else {\
+			return (this.noReturn) ? 0 : [];\
+		}\
+	}\
+	else {\
+		throw(new Error(\"Buffer was of incorrect sample length.\"));\
+	}";
+	this.resampler = Function("buffer", toCompile);
+}
+Resampler.prototype.bypassResampler = function (buffer) {
+	if (this.noReturn) {
+		//Set the buffer passed as our own, as we don't need to resample it:
+		this.outputBuffer = buffer;
+		return buffer.length;
+	}
+	else {
+		//Just return the buffer passsed:
+		return buffer;
+	}
+}
+Resampler.prototype.bufferSlice = function (sliceAmount) {
+	if (this.noReturn) {
+		//If we're going to access the properties directly from this object:
+		return sliceAmount;
+	}
+	else {
+		//Typed array and normal array buffer section referencing:
+		try {
+			return this.outputBuffer.subarray(0, sliceAmount);
+		}
+		catch (error) {
+			try {
+				//Regular array pass:
+				this.outputBuffer.length = sliceAmount;
+				return this.outputBuffer;
+			}
+			catch (error) {
+				//Nightly Firefox 4 used to have the subarray function named as slice:
+				return this.outputBuffer.slice(0, sliceAmount);
+			}
+		}
+	}
+}
+Resampler.prototype.initializeBuffers = function () {
+	//Initialize the internal buffer:
+	try {
+		this.outputBuffer = new Float32Array(this.outputBufferSize);
+		this.lastOutput = new Float32Array(this.channels);
+	}
+	catch (error) {
+		this.outputBuffer = [];
+		this.lastOutput = [];
+	}
+}
+
+},{}],83:[function(require,module,exports){
 module.exports = function(opts){
 
   var ctx = opts.canvas.getContext('2d');
@@ -14220,7 +14533,7 @@ function avg(opts){
     return results 
 }
 
-},{}],82:[function(require,module,exports){
+},{}],84:[function(require,module,exports){
 // Source: http://jsfiddle.net/vWx8V/
 // http://stackoverflow.com/questions/5603195/full-list-of-javascript-keycodes
 
@@ -14369,63 +14682,63 @@ for (var alias in aliases) {
   codes[alias] = aliases[alias]
 }
 
-},{}],83:[function(require,module,exports){
+},{}],85:[function(require,module,exports){
 arguments[4][27][0].apply(exports,arguments)
-},{"dup":27}],84:[function(require,module,exports){
+},{"dup":27}],86:[function(require,module,exports){
 arguments[4][28][0].apply(exports,arguments)
-},{"./lib/fft-matrix.js":85,"cwise":86,"dup":28,"ndarray":101,"ndarray-ops":94,"typedarray-pool":93}],85:[function(require,module,exports){
+},{"./lib/fft-matrix.js":87,"cwise":88,"dup":28,"ndarray":103,"ndarray-ops":96,"typedarray-pool":95}],87:[function(require,module,exports){
 arguments[4][29][0].apply(exports,arguments)
-},{"bit-twiddle":83,"dup":29}],86:[function(require,module,exports){
+},{"bit-twiddle":85,"dup":29}],88:[function(require,module,exports){
 arguments[4][30][0].apply(exports,arguments)
-},{"./lib/parser.js":88,"./lib/shim.js":89,"dup":30}],87:[function(require,module,exports){
+},{"./lib/parser.js":90,"./lib/shim.js":91,"dup":30}],89:[function(require,module,exports){
 arguments[4][31][0].apply(exports,arguments)
-},{"dup":31}],88:[function(require,module,exports){
+},{"dup":31}],90:[function(require,module,exports){
 arguments[4][32][0].apply(exports,arguments)
-},{"dup":32,"falafel":90}],89:[function(require,module,exports){
+},{"dup":32,"falafel":92}],91:[function(require,module,exports){
 arguments[4][33][0].apply(exports,arguments)
-},{"./generate.js":87,"dup":33}],90:[function(require,module,exports){
+},{"./generate.js":89,"dup":33}],92:[function(require,module,exports){
 arguments[4][34][0].apply(exports,arguments)
-},{"dup":34,"esprima":91}],91:[function(require,module,exports){
+},{"dup":34,"esprima":93}],93:[function(require,module,exports){
 arguments[4][35][0].apply(exports,arguments)
-},{"dup":35}],92:[function(require,module,exports){
+},{"dup":35}],94:[function(require,module,exports){
 arguments[4][36][0].apply(exports,arguments)
-},{"dup":36}],93:[function(require,module,exports){
+},{"dup":36}],95:[function(require,module,exports){
 arguments[4][37][0].apply(exports,arguments)
-},{"bit-twiddle":83,"dup":37}],94:[function(require,module,exports){
+},{"bit-twiddle":85,"dup":37}],96:[function(require,module,exports){
 arguments[4][38][0].apply(exports,arguments)
-},{"cwise":95,"dup":38,"ndarray":101}],95:[function(require,module,exports){
+},{"cwise":97,"dup":38,"ndarray":103}],97:[function(require,module,exports){
 arguments[4][30][0].apply(exports,arguments)
-},{"./lib/parser.js":97,"./lib/shim.js":98,"dup":30}],96:[function(require,module,exports){
+},{"./lib/parser.js":99,"./lib/shim.js":100,"dup":30}],98:[function(require,module,exports){
 arguments[4][31][0].apply(exports,arguments)
-},{"dup":31}],97:[function(require,module,exports){
+},{"dup":31}],99:[function(require,module,exports){
 arguments[4][32][0].apply(exports,arguments)
-},{"dup":32,"falafel":99}],98:[function(require,module,exports){
+},{"dup":32,"falafel":101}],100:[function(require,module,exports){
 arguments[4][33][0].apply(exports,arguments)
-},{"./generate.js":96,"dup":33}],99:[function(require,module,exports){
+},{"./generate.js":98,"dup":33}],101:[function(require,module,exports){
 arguments[4][34][0].apply(exports,arguments)
-},{"dup":34,"esprima":100}],100:[function(require,module,exports){
+},{"dup":34,"esprima":102}],102:[function(require,module,exports){
 arguments[4][35][0].apply(exports,arguments)
-},{"dup":35}],101:[function(require,module,exports){
+},{"dup":35}],103:[function(require,module,exports){
 arguments[4][45][0].apply(exports,arguments)
-},{"./lib/tools.js":102,"./lib/viewn.js":103,"dup":45}],102:[function(require,module,exports){
+},{"./lib/tools.js":104,"./lib/viewn.js":105,"dup":45}],104:[function(require,module,exports){
 arguments[4][46][0].apply(exports,arguments)
-},{"dup":46}],103:[function(require,module,exports){
+},{"dup":46}],105:[function(require,module,exports){
 arguments[4][47][0].apply(exports,arguments)
-},{"./tools.js":102,"dup":47}],104:[function(require,module,exports){
+},{"./tools.js":104,"dup":47}],106:[function(require,module,exports){
 arguments[4][48][0].apply(exports,arguments)
-},{"bit-twiddle":83,"dup":48,"ndarray":101,"ndarray-fft":84,"ndarray-ops":94,"typedarray-pool":109}],105:[function(require,module,exports){
+},{"bit-twiddle":85,"dup":48,"ndarray":103,"ndarray-fft":86,"ndarray-ops":96,"typedarray-pool":111}],107:[function(require,module,exports){
 arguments[4][49][0].apply(exports,arguments)
-},{"dup":49}],106:[function(require,module,exports){
+},{"dup":49}],108:[function(require,module,exports){
 arguments[4][50][0].apply(exports,arguments)
-},{"dup":50}],107:[function(require,module,exports){
+},{"dup":50}],109:[function(require,module,exports){
 arguments[4][27][0].apply(exports,arguments)
-},{"dup":27}],108:[function(require,module,exports){
+},{"dup":27}],110:[function(require,module,exports){
 arguments[4][36][0].apply(exports,arguments)
-},{"dup":36}],109:[function(require,module,exports){
+},{"dup":36}],111:[function(require,module,exports){
 arguments[4][53][0].apply(exports,arguments)
-},{"bit-twiddle":107,"dup":53}],110:[function(require,module,exports){
+},{"bit-twiddle":109,"dup":53}],112:[function(require,module,exports){
 arguments[4][54][0].apply(exports,arguments)
-},{"detect-pitch":104,"dup":54,"frame-hop":105,"overlap-add":106,"typedarray-pool":109}],111:[function(require,module,exports){
+},{"detect-pitch":106,"dup":54,"frame-hop":107,"overlap-add":108,"typedarray-pool":111}],113:[function(require,module,exports){
 //     uuid.js
 //
 //     Copyright (c) 2010-2012 Robert Kieffer
@@ -14674,7 +14987,7 @@ arguments[4][54][0].apply(exports,arguments)
   }
 }).call(this);
 
-},{}],112:[function(require,module,exports){
+},{}],114:[function(require,module,exports){
 /**
  * Merge object b with object a.
  *
@@ -14699,7 +15012,7 @@ exports = module.exports = function(a, b){
   return a;
 };
 
-},{}],113:[function(require,module,exports){
+},{}],115:[function(require,module,exports){
 var touchy = require('./touchy.js')
 ,   uuid = require('node-uuid')
 ,   merge = require('utils-merge')
@@ -14954,7 +15267,7 @@ touch.prototype.handleMouse = function(x){
 
 
 
-},{"./touchy.js":114,"node-uuid":111,"utils-merge":112}],114:[function(require,module,exports){
+},{"./touchy.js":116,"node-uuid":113,"utils-merge":114}],116:[function(require,module,exports){
 /* Modernizr 2.6.2 (Custom Build) | MIT & BSD
  * Build: http://modernizr.com/download/#-touch-teststyles-prefixes
  */
@@ -15697,7 +16010,7 @@ Touchy.startWindowBounce = function () {
 
 module.exports = Touchy;
 
-},{}],115:[function(require,module,exports){
+},{}],117:[function(require,module,exports){
 var Resample = require('./resampler.js')
 var shift = require('pitch-shift')
 var jbuffers = require('jbuffers')
@@ -15708,7 +16021,6 @@ var hop = 256
 module.exports = function(sr, buf, params){
 
   if(!(sr === params.sampleRate) && params.sampleRate) {
-    console.log('samplerate') 
     var resample = new Resample(sr, params.sampleRate, 1, buf.length * sr / params.sampleRate)
     var buf = resample.resampler(buf)
     sr = params.sampleRate
@@ -15716,7 +16028,6 @@ module.exports = function(sr, buf, params){
   
   if(!(params.pitch === 1) && params.pitch){
 
-    console.log('pitch', params.pitch) 
     var queue = jbuffers(6)
     var q = 1, e = Math.floor(buf.length / frame_size)
     var shifter = shift(function(data){
@@ -15740,17 +16051,16 @@ module.exports = function(sr, buf, params){
 
   }
   if(!(params.amplitude === 1) && params.amplitude){
-    console.log('amp') 
     buf = amp(buf, params.amplitude)
   }
 
   if(!(params.speed === 1) && params.speed){
-    console.log('speed') 
     //buf = thrash(buf, params.speed)
     //  not ideal but should work for now
-    var resample = new Resample(sr, sr / params.speed, 1, buf.length / params.speed)
-    var buf = resample.resampler(buf)
-    sr = params.sampleRate
+//    var resample = new Resample(sr, sr / params.speed, 1, buf.length / params.speed)
+//    var buf = resample.resampler(buf)
+//    sr = params.sampleRate
+    buf = speed(buf, params.speed)
   }
   
   return buf
@@ -15773,6 +16083,14 @@ function thrash(_track, div, ac, offset){
   }else return track 
 }
 
+function speed(buf, s){
+  var nb = new Float32Array(Math.floor(buf.length / s))
+  for(var x = 0; x < nb.length; x++){
+    nb[x] = nb[x] + buf[Math.floor(x * s)]
+  }
+  return nb
+}
+
 function amp(buf, a){
   Array.prototype.forEach.call(buf, function(e, i){
     buf[i] = e * a
@@ -15793,220 +16111,9 @@ function mergeTracks(tracks, a){
   return track
 }
 
-},{"./resampler.js":116,"jbuffers":79,"pitch-shift":110}],116:[function(require,module,exports){
-//JavaScript Audio Resampler (c) 2011 - Grant Galitz
-module.exports = Resampler
-
-function Resampler(fromSampleRate, toSampleRate, channels, outputBufferSize, noReturn) {
-	this.fromSampleRate = fromSampleRate;
-	this.toSampleRate = toSampleRate;
-	this.channels = channels | 0;
-	this.outputBufferSize = outputBufferSize;
-	this.noReturn = !!noReturn;
-	this.initialize();
-}
-
-Resampler.prototype.initialize = function () {
-	//Perform some checks:
-	if (this.fromSampleRate > 0 && this.toSampleRate > 0 && this.channels > 0) {
-		if (this.fromSampleRate == this.toSampleRate) {
-			//Setup a resampler bypass:
-			this.resampler = this.bypassResampler;		//Resampler just returns what was passed through.
-			this.ratioWeight = 1;
-		}
-		else {
-			if (this.fromSampleRate < this.toSampleRate) {
-				/*
-					Use generic linear interpolation if upsampling,
-					as linear interpolation produces a gradient that we want
-					and works fine with two input sample points per output in this case.
-				*/
-				this.compileLinearInterpolationFunction();
-				this.lastWeight = 1;
-			}
-			else {
-				/*
-					Custom resampler I wrote that doesn't skip samples
-					like standard linear interpolation in high downsampling.
-					This is more accurate than linear interpolation on downsampling.
-				*/
-				this.compileMultiTapFunction();
-				this.tailExists = false;
-				this.lastWeight = 0;
-			}
-			this.ratioWeight = this.fromSampleRate / this.toSampleRate;
-			this.initializeBuffers();
-		}
-	}
-	else {
-		throw(new Error("Invalid settings specified for the resampler."));
-	}
-}
-Resampler.prototype.compileLinearInterpolationFunction = function () {
-	var toCompile = "var bufferLength = buffer.length;\
-	var outLength = this.outputBufferSize;\
-	if ((bufferLength % " + this.channels + ") == 0) {\
-		if (bufferLength > 0) {\
-			var ratioWeight = this.ratioWeight;\
-			var weight = this.lastWeight;\
-			var firstWeight = 0;\
-			var secondWeight = 0;\
-			var sourceOffset = 0;\
-			var outputOffset = 0;\
-			var outputBuffer = this.outputBuffer;\
-			for (; weight < 1; weight += ratioWeight) {\
-				secondWeight = weight % 1;\
-				firstWeight = 1 - secondWeight;";
-	for (var channel = 0; channel < this.channels; ++channel) {
-		toCompile += "outputBuffer[outputOffset++] = (this.lastOutput[" + channel + "] * firstWeight) + (buffer[" + channel + "] * secondWeight);";
-	}
-	toCompile += "}\
-			weight -= 1;\
-			for (bufferLength -= " + this.channels + ", sourceOffset = Math.floor(weight) * " + this.channels + "; outputOffset < outLength && sourceOffset < bufferLength;) {\
-				secondWeight = weight % 1;\
-				firstWeight = 1 - secondWeight;";
-	for (var channel = 0; channel < this.channels; ++channel) {
-		toCompile += "outputBuffer[outputOffset++] = (buffer[sourceOffset" + ((channel > 0) ? (" + " + channel) : "") + "] * firstWeight) + (buffer[sourceOffset + " + (this.channels + channel) + "] * secondWeight);";
-	}
-	toCompile += "weight += ratioWeight;\
-				sourceOffset = Math.floor(weight) * " + this.channels + ";\
-			}";
-	for (var channel = 0; channel < this.channels; ++channel) {
-		toCompile += "this.lastOutput[" + channel + "] = buffer[sourceOffset++];";
-	}
-	toCompile += "this.lastWeight = weight % 1;\
-			return this.bufferSlice(outputOffset);\
-		}\
-		else {\
-			return (this.noReturn) ? 0 : [];\
-		}\
-	}\
-	else {\
-		throw(new Error(\"Buffer was of incorrect sample length.\"));\
-	}";
-	this.resampler = Function("buffer", toCompile);
-}
-Resampler.prototype.compileMultiTapFunction = function () {
-	var toCompile = "var bufferLength = buffer.length;\
-	var outLength = this.outputBufferSize;\
-	if ((bufferLength % " + this.channels + ") == 0) {\
-		if (bufferLength > 0) {\
-			var ratioWeight = this.ratioWeight;\
-			var weight = 0;";
-	for (var channel = 0; channel < this.channels; ++channel) {
-		toCompile += "var output" + channel + " = 0;"
-	}
-	toCompile += "var actualPosition = 0;\
-			var amountToNext = 0;\
-			var alreadyProcessedTail = !this.tailExists;\
-			this.tailExists = false;\
-			var outputBuffer = this.outputBuffer;\
-			var outputOffset = 0;\
-			var currentPosition = 0;\
-			do {\
-				if (alreadyProcessedTail) {\
-					weight = ratioWeight;";
-	for (channel = 0; channel < this.channels; ++channel) {
-		toCompile += "output" + channel + " = 0;"
-	}
-	toCompile += "}\
-				else {\
-					weight = this.lastWeight;";
-	for (channel = 0; channel < this.channels; ++channel) {
-		toCompile += "output" + channel + " = this.lastOutput[" + channel + "];"
-	}
-	toCompile += "alreadyProcessedTail = true;\
-				}\
-				while (weight > 0 && actualPosition < bufferLength) {\
-					amountToNext = 1 + actualPosition - currentPosition;\
-					if (weight >= amountToNext) {";
-	for (channel = 0; channel < this.channels; ++channel) {
-		toCompile += "output" + channel + " += buffer[actualPosition++] * amountToNext;"
-	}
-	toCompile += "currentPosition = actualPosition;\
-						weight -= amountToNext;\
-					}\
-					else {";
-	for (channel = 0; channel < this.channels; ++channel) {
-		toCompile += "output" + channel + " += buffer[actualPosition" + ((channel > 0) ? (" + " + channel) : "") + "] * weight;"
-	}
-	toCompile += "currentPosition += weight;\
-						weight = 0;\
-						break;\
-					}\
-				}\
-				if (weight == 0) {";
-	for (channel = 0; channel < this.channels; ++channel) {
-		toCompile += "outputBuffer[outputOffset++] = output" + channel + " / ratioWeight;"
-	}
-	toCompile += "}\
-				else {\
-					this.lastWeight = weight;";
-	for (channel = 0; channel < this.channels; ++channel) {
-		toCompile += "this.lastOutput[" + channel + "] = output" + channel + ";"
-	}
-	toCompile += "this.tailExists = true;\
-					break;\
-				}\
-			} while (actualPosition < bufferLength && outputOffset < outLength);\
-			return this.bufferSlice(outputOffset);\
-		}\
-		else {\
-			return (this.noReturn) ? 0 : [];\
-		}\
-	}\
-	else {\
-		throw(new Error(\"Buffer was of incorrect sample length.\"));\
-	}";
-	this.resampler = Function("buffer", toCompile);
-}
-Resampler.prototype.bypassResampler = function (buffer) {
-	if (this.noReturn) {
-		//Set the buffer passed as our own, as we don't need to resample it:
-		this.outputBuffer = buffer;
-		return buffer.length;
-	}
-	else {
-		//Just return the buffer passsed:
-		return buffer;
-	}
-}
-Resampler.prototype.bufferSlice = function (sliceAmount) {
-	if (this.noReturn) {
-		//If we're going to access the properties directly from this object:
-		return sliceAmount;
-	}
-	else {
-		//Typed array and normal array buffer section referencing:
-		try {
-			return this.outputBuffer.subarray(0, sliceAmount);
-		}
-		catch (error) {
-			try {
-				//Regular array pass:
-				this.outputBuffer.length = sliceAmount;
-				return this.outputBuffer;
-			}
-			catch (error) {
-				//Nightly Firefox 4 used to have the subarray function named as slice:
-				return this.outputBuffer.slice(0, sliceAmount);
-			}
-		}
-	}
-}
-Resampler.prototype.initializeBuffers = function () {
-	//Initialize the internal buffer:
-	try {
-		this.outputBuffer = new Float32Array(this.outputBufferSize);
-		this.lastOutput = new Float32Array(this.channels);
-	}
-	catch (error) {
-		this.outputBuffer = [];
-		this.lastOutput = [];
-	}
-}
-
-},{}],117:[function(require,module,exports){
+},{"./resampler.js":118,"jbuffers":79,"pitch-shift":112}],118:[function(require,module,exports){
+arguments[4][82][0].apply(exports,arguments)
+},{"dup":82}],119:[function(require,module,exports){
 var buffers = require('jbuffers')
 var through = require('through2')
 var jsynth = require('../jsynth')
@@ -16181,11 +16288,11 @@ module.exports = function(master, _buffer, cb, size){
 
 
 
-},{"../jsynth":130,"jbuffers":118,"through2":129}],118:[function(require,module,exports){
+},{"../jsynth":132,"jbuffers":120,"through2":131}],120:[function(require,module,exports){
 arguments[4][79][0].apply(exports,arguments)
-},{"dup":79}],119:[function(require,module,exports){
+},{"dup":79}],121:[function(require,module,exports){
 arguments[4][12][0].apply(exports,arguments)
-},{"./_stream_readable":120,"./_stream_writable":122,"_process":10,"core-util-is":123,"dup":12,"inherits":124}],120:[function(require,module,exports){
+},{"./_stream_readable":122,"./_stream_writable":124,"_process":10,"core-util-is":125,"dup":12,"inherits":126}],122:[function(require,module,exports){
 (function (process){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -17171,7 +17278,7 @@ function indexOf (xs, x) {
 }
 
 }).call(this,require('_process'))
-},{"_process":10,"buffer":2,"core-util-is":123,"events":6,"inherits":124,"isarray":125,"stream":22,"string_decoder/":126}],121:[function(require,module,exports){
+},{"_process":10,"buffer":2,"core-util-is":125,"events":6,"inherits":126,"isarray":127,"stream":22,"string_decoder/":128}],123:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -17383,7 +17490,7 @@ function done(stream, er) {
   return stream.push(null);
 }
 
-},{"./_stream_duplex":119,"core-util-is":123,"inherits":124}],122:[function(require,module,exports){
+},{"./_stream_duplex":121,"core-util-is":125,"inherits":126}],124:[function(require,module,exports){
 (function (process){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -17773,17 +17880,17 @@ function endWritable(stream, state, cb) {
 }
 
 }).call(this,require('_process'))
-},{"./_stream_duplex":119,"_process":10,"buffer":2,"core-util-is":123,"inherits":124,"stream":22}],123:[function(require,module,exports){
+},{"./_stream_duplex":121,"_process":10,"buffer":2,"core-util-is":125,"inherits":126,"stream":22}],125:[function(require,module,exports){
 arguments[4][17][0].apply(exports,arguments)
-},{"buffer":2,"dup":17}],124:[function(require,module,exports){
+},{"buffer":2,"dup":17}],126:[function(require,module,exports){
 arguments[4][7][0].apply(exports,arguments)
-},{"dup":7}],125:[function(require,module,exports){
+},{"dup":7}],127:[function(require,module,exports){
 arguments[4][8][0].apply(exports,arguments)
-},{"dup":8}],126:[function(require,module,exports){
+},{"dup":8}],128:[function(require,module,exports){
 arguments[4][23][0].apply(exports,arguments)
-},{"buffer":2,"dup":23}],127:[function(require,module,exports){
+},{"buffer":2,"dup":23}],129:[function(require,module,exports){
 arguments[4][20][0].apply(exports,arguments)
-},{"./lib/_stream_transform.js":121,"dup":20}],128:[function(require,module,exports){
+},{"./lib/_stream_transform.js":123,"dup":20}],130:[function(require,module,exports){
 module.exports = extend
 
 function extend() {
@@ -17802,7 +17909,7 @@ function extend() {
     return target
 }
 
-},{}],129:[function(require,module,exports){
+},{}],131:[function(require,module,exports){
 (function (process){
 var Transform = require('readable-stream/transform')
   , inherits  = require('util').inherits
@@ -17902,7 +18009,7 @@ module.exports.obj = through2(function (options, transform, flush) {
 })
 
 }).call(this,require('_process'))
-},{"_process":10,"readable-stream/transform":127,"util":25,"xtend":128}],130:[function(require,module,exports){
+},{"_process":10,"readable-stream/transform":129,"util":25,"xtend":130}],132:[function(require,module,exports){
 module.exports = function (context, fn, bufSize) {
 
     if (typeof context === 'function') {
@@ -18016,7 +18123,7 @@ function signed (n) {
     ;
 }
 
-},{}],131:[function(require,module,exports){
+},{}],133:[function(require,module,exports){
 var close = require('closeness')
 
 module.exports = function(node, points, fn){
@@ -18140,13 +18247,13 @@ function findPos(obj) {
   };
 };
 
-},{"closeness":132}],132:[function(require,module,exports){
+},{"closeness":134}],134:[function(require,module,exports){
 module.exports = function(num, dist){
 	return function(val){
 		return (Math.abs(num - val) < dist)
 	}
 };
-},{}],133:[function(require,module,exports){
+},{}],135:[function(require,module,exports){
 (function (process){
 var Stream = require('stream')
 
@@ -18258,7 +18365,7 @@ function through (write, end, opts) {
 
 
 }).call(this,require('_process'))
-},{"_process":10,"stream":22}],134:[function(require,module,exports){
+},{"_process":10,"stream":22}],136:[function(require,module,exports){
 (function (process){
 var through = require('through');
 var path = require('path');
@@ -18709,4 +18816,4 @@ function maybeCallback(cb) {
 
 
 }).call(this,require('_process'))
-},{"_process":10,"path":9,"through":133}]},{},[59]);
+},{"_process":10,"path":9,"through":135}]},{},[59]);

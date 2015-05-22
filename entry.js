@@ -8,7 +8,7 @@ var touchdown = require('touchdown')
 var drop = require('drag-drop/buffer')
 var ready = require('doc-ready')
 var hover = require('../mousearound')
-var resample = require('./resample.js')
+var resample = require('jsynth-resampler')
 
 var sampler = require('./')
 var context = new AudioContext

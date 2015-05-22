@@ -193,10 +193,8 @@ function sampler (master, buff, parel, cb){
       s.loopStart = self.loop ? self.source.loopStart : pos 
       s.loopEnd = self.source.loopEnd || self.source.buffer.duration
       s.playbackRate= self.playbackRate
-      self.amplitude(self.source.gain) 
       s.onended = function(){
-
-          console.log('ended')
+        console.log('ended')
         if(!(self.loop)) self.playing = false
         else {
           fireSample(buf, pos)
@@ -206,7 +204,9 @@ function sampler (master, buff, parel, cb){
       self.startTime = master.currentTime
       self.timeOffset = -self.startTime + pos
       self.currentTime = self.startTime + pos
+      var g = self.source.gain || 1
       self.source = s;
+      self.amplitude(g) 
       if(self.reversed) {
         self.reversed = false
         self.reverse()
