@@ -1997,6 +1997,234 @@ module.exports = Array.isArray || function (arr) {
 };
 
 },{}],9:[function(require,module,exports){
+(function (process){
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+// resolves . and .. elements in a path array with directory names there
+// must be no slashes, empty elements, or device names (c:\) in the array
+// (so also no leading and trailing slashes - it does not distinguish
+// relative and absolute paths)
+function normalizeArray(parts, allowAboveRoot) {
+  // if the path tries to go above the root, `up` ends up > 0
+  var up = 0;
+  for (var i = parts.length - 1; i >= 0; i--) {
+    var last = parts[i];
+    if (last === '.') {
+      parts.splice(i, 1);
+    } else if (last === '..') {
+      parts.splice(i, 1);
+      up++;
+    } else if (up) {
+      parts.splice(i, 1);
+      up--;
+    }
+  }
+
+  // if the path is allowed to go above the root, restore leading ..s
+  if (allowAboveRoot) {
+    for (; up--; up) {
+      parts.unshift('..');
+    }
+  }
+
+  return parts;
+}
+
+// Split a filename into [root, dir, basename, ext], unix version
+// 'root' is just a slash, or nothing.
+var splitPathRe =
+    /^(\/?|)([\s\S]*?)((?:\.{1,2}|[^\/]+?|)(\.[^.\/]*|))(?:[\/]*)$/;
+var splitPath = function(filename) {
+  return splitPathRe.exec(filename).slice(1);
+};
+
+// path.resolve([from ...], to)
+// posix version
+exports.resolve = function() {
+  var resolvedPath = '',
+      resolvedAbsolute = false;
+
+  for (var i = arguments.length - 1; i >= -1 && !resolvedAbsolute; i--) {
+    var path = (i >= 0) ? arguments[i] : process.cwd();
+
+    // Skip empty and invalid entries
+    if (typeof path !== 'string') {
+      throw new TypeError('Arguments to path.resolve must be strings');
+    } else if (!path) {
+      continue;
+    }
+
+    resolvedPath = path + '/' + resolvedPath;
+    resolvedAbsolute = path.charAt(0) === '/';
+  }
+
+  // At this point the path should be resolved to a full absolute path, but
+  // handle relative paths to be safe (might happen when process.cwd() fails)
+
+  // Normalize the path
+  resolvedPath = normalizeArray(filter(resolvedPath.split('/'), function(p) {
+    return !!p;
+  }), !resolvedAbsolute).join('/');
+
+  return ((resolvedAbsolute ? '/' : '') + resolvedPath) || '.';
+};
+
+// path.normalize(path)
+// posix version
+exports.normalize = function(path) {
+  var isAbsolute = exports.isAbsolute(path),
+      trailingSlash = substr(path, -1) === '/';
+
+  // Normalize the path
+  path = normalizeArray(filter(path.split('/'), function(p) {
+    return !!p;
+  }), !isAbsolute).join('/');
+
+  if (!path && !isAbsolute) {
+    path = '.';
+  }
+  if (path && trailingSlash) {
+    path += '/';
+  }
+
+  return (isAbsolute ? '/' : '') + path;
+};
+
+// posix version
+exports.isAbsolute = function(path) {
+  return path.charAt(0) === '/';
+};
+
+// posix version
+exports.join = function() {
+  var paths = Array.prototype.slice.call(arguments, 0);
+  return exports.normalize(filter(paths, function(p, index) {
+    if (typeof p !== 'string') {
+      throw new TypeError('Arguments to path.join must be strings');
+    }
+    return p;
+  }).join('/'));
+};
+
+
+// path.relative(from, to)
+// posix version
+exports.relative = function(from, to) {
+  from = exports.resolve(from).substr(1);
+  to = exports.resolve(to).substr(1);
+
+  function trim(arr) {
+    var start = 0;
+    for (; start < arr.length; start++) {
+      if (arr[start] !== '') break;
+    }
+
+    var end = arr.length - 1;
+    for (; end >= 0; end--) {
+      if (arr[end] !== '') break;
+    }
+
+    if (start > end) return [];
+    return arr.slice(start, end - start + 1);
+  }
+
+  var fromParts = trim(from.split('/'));
+  var toParts = trim(to.split('/'));
+
+  var length = Math.min(fromParts.length, toParts.length);
+  var samePartsLength = length;
+  for (var i = 0; i < length; i++) {
+    if (fromParts[i] !== toParts[i]) {
+      samePartsLength = i;
+      break;
+    }
+  }
+
+  var outputParts = [];
+  for (var i = samePartsLength; i < fromParts.length; i++) {
+    outputParts.push('..');
+  }
+
+  outputParts = outputParts.concat(toParts.slice(samePartsLength));
+
+  return outputParts.join('/');
+};
+
+exports.sep = '/';
+exports.delimiter = ':';
+
+exports.dirname = function(path) {
+  var result = splitPath(path),
+      root = result[0],
+      dir = result[1];
+
+  if (!root && !dir) {
+    // No dirname whatsoever
+    return '.';
+  }
+
+  if (dir) {
+    // It has a dirname, strip trailing slash
+    dir = dir.substr(0, dir.length - 1);
+  }
+
+  return root + dir;
+};
+
+
+exports.basename = function(path, ext) {
+  var f = splitPath(path)[2];
+  // TODO: make this comparison case-insensitive on windows?
+  if (ext && f.substr(-1 * ext.length) === ext) {
+    f = f.substr(0, f.length - ext.length);
+  }
+  return f;
+};
+
+
+exports.extname = function(path) {
+  return splitPath(path)[3];
+};
+
+function filter (xs, f) {
+    if (xs.filter) return xs.filter(f);
+    var res = [];
+    for (var i = 0; i < xs.length; i++) {
+        if (f(xs[i], i, xs)) res.push(xs[i]);
+    }
+    return res;
+}
+
+// String.prototype.substr - negative index don't work in IE8
+var substr = 'ab'.substr(-1) === 'b'
+    ? function (str, start, len) { return str.substr(start, len) }
+    : function (str, start, len) {
+        if (start < 0) start = str.length + start;
+        return str.substr(start, len);
+    }
+;
+
+}).call(this,require('_process'))
+},{"_process":10}],10:[function(require,module,exports){
 // shim for using process in browser
 
 var process = module.exports = {};
@@ -2056,10 +2284,10 @@ process.chdir = function (dir) {
 };
 process.umask = function() { return 0; };
 
-},{}],10:[function(require,module,exports){
+},{}],11:[function(require,module,exports){
 module.exports = require("./lib/_stream_duplex.js")
 
-},{"./lib/_stream_duplex.js":11}],11:[function(require,module,exports){
+},{"./lib/_stream_duplex.js":12}],12:[function(require,module,exports){
 (function (process){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -2152,7 +2380,7 @@ function forEach (xs, f) {
 }
 
 }).call(this,require('_process'))
-},{"./_stream_readable":13,"./_stream_writable":15,"_process":9,"core-util-is":16,"inherits":7}],12:[function(require,module,exports){
+},{"./_stream_readable":14,"./_stream_writable":16,"_process":10,"core-util-is":17,"inherits":7}],13:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -2200,7 +2428,7 @@ PassThrough.prototype._transform = function(chunk, encoding, cb) {
   cb(null, chunk);
 };
 
-},{"./_stream_transform":14,"core-util-is":16,"inherits":7}],13:[function(require,module,exports){
+},{"./_stream_transform":15,"core-util-is":17,"inherits":7}],14:[function(require,module,exports){
 (function (process){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -3155,7 +3383,7 @@ function indexOf (xs, x) {
 }
 
 }).call(this,require('_process'))
-},{"./_stream_duplex":11,"_process":9,"buffer":2,"core-util-is":16,"events":6,"inherits":7,"isarray":8,"stream":21,"string_decoder/":22,"util":1}],14:[function(require,module,exports){
+},{"./_stream_duplex":12,"_process":10,"buffer":2,"core-util-is":17,"events":6,"inherits":7,"isarray":8,"stream":22,"string_decoder/":23,"util":1}],15:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -3366,7 +3594,7 @@ function done(stream, er) {
   return stream.push(null);
 }
 
-},{"./_stream_duplex":11,"core-util-is":16,"inherits":7}],15:[function(require,module,exports){
+},{"./_stream_duplex":12,"core-util-is":17,"inherits":7}],16:[function(require,module,exports){
 (function (process){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -3847,7 +4075,7 @@ function endWritable(stream, state, cb) {
 }
 
 }).call(this,require('_process'))
-},{"./_stream_duplex":11,"_process":9,"buffer":2,"core-util-is":16,"inherits":7,"stream":21}],16:[function(require,module,exports){
+},{"./_stream_duplex":12,"_process":10,"buffer":2,"core-util-is":17,"inherits":7,"stream":22}],17:[function(require,module,exports){
 (function (Buffer){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -3957,10 +4185,10 @@ function objectToString(o) {
   return Object.prototype.toString.call(o);
 }
 }).call(this,require("buffer").Buffer)
-},{"buffer":2}],17:[function(require,module,exports){
+},{"buffer":2}],18:[function(require,module,exports){
 module.exports = require("./lib/_stream_passthrough.js")
 
-},{"./lib/_stream_passthrough.js":12}],18:[function(require,module,exports){
+},{"./lib/_stream_passthrough.js":13}],19:[function(require,module,exports){
 var Stream = require('stream'); // hack to fix a circular dependency issue when used with browserify
 exports = module.exports = require('./lib/_stream_readable.js');
 exports.Stream = Stream;
@@ -3970,13 +4198,13 @@ exports.Duplex = require('./lib/_stream_duplex.js');
 exports.Transform = require('./lib/_stream_transform.js');
 exports.PassThrough = require('./lib/_stream_passthrough.js');
 
-},{"./lib/_stream_duplex.js":11,"./lib/_stream_passthrough.js":12,"./lib/_stream_readable.js":13,"./lib/_stream_transform.js":14,"./lib/_stream_writable.js":15,"stream":21}],19:[function(require,module,exports){
+},{"./lib/_stream_duplex.js":12,"./lib/_stream_passthrough.js":13,"./lib/_stream_readable.js":14,"./lib/_stream_transform.js":15,"./lib/_stream_writable.js":16,"stream":22}],20:[function(require,module,exports){
 module.exports = require("./lib/_stream_transform.js")
 
-},{"./lib/_stream_transform.js":14}],20:[function(require,module,exports){
+},{"./lib/_stream_transform.js":15}],21:[function(require,module,exports){
 module.exports = require("./lib/_stream_writable.js")
 
-},{"./lib/_stream_writable.js":15}],21:[function(require,module,exports){
+},{"./lib/_stream_writable.js":16}],22:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -4105,7 +4333,7 @@ Stream.prototype.pipe = function(dest, options) {
   return dest;
 };
 
-},{"events":6,"inherits":7,"readable-stream/duplex.js":10,"readable-stream/passthrough.js":17,"readable-stream/readable.js":18,"readable-stream/transform.js":19,"readable-stream/writable.js":20}],22:[function(require,module,exports){
+},{"events":6,"inherits":7,"readable-stream/duplex.js":11,"readable-stream/passthrough.js":18,"readable-stream/readable.js":19,"readable-stream/transform.js":20,"readable-stream/writable.js":21}],23:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -4328,14 +4556,14 @@ function base64DetectIncompleteChar(buffer) {
   this.charLength = this.charReceived ? 3 : 0;
 }
 
-},{"buffer":2}],23:[function(require,module,exports){
+},{"buffer":2}],24:[function(require,module,exports){
 module.exports = function isBuffer(arg) {
   return arg && typeof arg === 'object'
     && typeof arg.copy === 'function'
     && typeof arg.fill === 'function'
     && typeof arg.readUInt8 === 'function';
 }
-},{}],24:[function(require,module,exports){
+},{}],25:[function(require,module,exports){
 (function (process,global){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -4925,7 +5153,7 @@ function hasOwnProperty(obj, prop) {
 }
 
 }).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./support/isBuffer":23,"_process":9,"inherits":7}],25:[function(require,module,exports){
+},{"./support/isBuffer":24,"_process":10,"inherits":7}],26:[function(require,module,exports){
 var shift = require('pitch-shift')
 var pool = require('typedarray-pool')
 var frame_size = 512 * 2 * 2 
@@ -4946,7 +5174,9 @@ module.exports = function(master, size, fn){
   }, fn, {
     frameSize: size,
     hopSize: hop,
-    sampleRate: master.sampleRate  
+    sampleRate: master.sampleRate,
+    freqThreshold: 1/2, 
+    harmonicScale: 1/4
   }) 
 
   var shiftNode = master.createScriptProcessor(size, 1, 1)
@@ -4965,7 +5195,7 @@ module.exports = function(master, size, fn){
 
 
 
-},{"pitch-shift":53,"typedarray-pool":56}],26:[function(require,module,exports){
+},{"pitch-shift":54,"typedarray-pool":57}],27:[function(require,module,exports){
 /**
  * Bit twiddling hacks for JavaScript.
  *
@@ -5171,7 +5401,7 @@ exports.nextCombination = function(v) {
 }
 
 
-},{}],27:[function(require,module,exports){
+},{}],28:[function(require,module,exports){
 "use strict"
 
 var ops = require("ndarray-ops")
@@ -5248,7 +5478,7 @@ function ndfft(dir, x, y) {
 
 module.exports = ndfft
 
-},{"./lib/fft-matrix.js":28,"cwise":29,"ndarray":44,"ndarray-ops":37,"typedarray-pool":36}],28:[function(require,module,exports){
+},{"./lib/fft-matrix.js":29,"cwise":30,"ndarray":45,"ndarray-ops":38,"typedarray-pool":37}],29:[function(require,module,exports){
 var bits = require("bit-twiddle")
 
 function fft(dir, nrows, ncols, buffer, x_ptr, y_ptr, scratch_ptr) {
@@ -5467,7 +5697,7 @@ function fftBluestein(dir, nrows, ncols, buffer, x_ptr, y_ptr, scratch_ptr) {
   }
 }
 
-},{"bit-twiddle":26}],29:[function(require,module,exports){
+},{"bit-twiddle":27}],30:[function(require,module,exports){
 "use strict"
 
 var Parser = require("./lib/parser.js")
@@ -5552,7 +5782,7 @@ function compile(user_args) {
 
 module.exports = compile
 
-},{"./lib/parser.js":31,"./lib/shim.js":32}],30:[function(require,module,exports){
+},{"./lib/parser.js":32,"./lib/shim.js":33}],31:[function(require,module,exports){
 "use strict"
 
 var RECURSION_LIMIT = 32
@@ -5772,7 +6002,7 @@ matched_loop:
 }
 
 module.exports = generate
-},{}],31:[function(require,module,exports){
+},{}],32:[function(require,module,exports){
 "use strict"
 
 var falafel = require("falafel")
@@ -5915,7 +6145,7 @@ Parser.prototype.postBlock = function() {
 }
 
 module.exports = Parser
-},{"falafel":33}],32:[function(require,module,exports){
+},{"falafel":34}],33:[function(require,module,exports){
 "use strict"
 
 var generate = require("./generate.js")
@@ -6017,7 +6247,7 @@ function createShim(shim_args, procedure) {
 module.exports = createShim
 
 
-},{"./generate.js":30}],33:[function(require,module,exports){
+},{"./generate.js":31}],34:[function(require,module,exports){
 var parse = require('esprima').parse;
 var objectKeys = Object.keys || function (obj) {
     var keys = [];
@@ -6113,7 +6343,7 @@ function insertHelpers (node, parent, chunks) {
     };
 }
 
-},{"esprima":34}],34:[function(require,module,exports){
+},{"esprima":35}],35:[function(require,module,exports){
 /*
   Copyright (C) 2012 Ariya Hidayat <ariya.hidayat@gmail.com>
   Copyright (C) 2012 Mathias Bynens <mathias@qiwi.be>
@@ -10023,7 +10253,7 @@ parseStatement: true, parseSourceElement: true */
 }));
 /* vim: set sw=4 ts=4 et tw=80 : */
 
-},{}],35:[function(require,module,exports){
+},{}],36:[function(require,module,exports){
 "use strict"
 
 function dupe_array(count, value, i) {
@@ -10073,7 +10303,7 @@ function dupe(count, value) {
 }
 
 module.exports = dupe
-},{}],36:[function(require,module,exports){
+},{}],37:[function(require,module,exports){
 (function (global){
 "use strict"
 
@@ -10257,7 +10487,7 @@ function clearCache() {
 }
 exports.clearCache = clearCache
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"bit-twiddle":26,"dup":35}],37:[function(require,module,exports){
+},{"bit-twiddle":27,"dup":36}],38:[function(require,module,exports){
 var cwise = require("cwise")
 var ndarray = require("ndarray")
 
@@ -10677,19 +10907,19 @@ exports.clone = function(array) {
   return exports.assign(result, array)
 }
 
-},{"cwise":38,"ndarray":44}],38:[function(require,module,exports){
-arguments[4][29][0].apply(exports,arguments)
-},{"./lib/parser.js":40,"./lib/shim.js":41,"dup":29}],39:[function(require,module,exports){
+},{"cwise":39,"ndarray":45}],39:[function(require,module,exports){
 arguments[4][30][0].apply(exports,arguments)
-},{"dup":30}],40:[function(require,module,exports){
+},{"./lib/parser.js":41,"./lib/shim.js":42,"dup":30}],40:[function(require,module,exports){
 arguments[4][31][0].apply(exports,arguments)
-},{"dup":31,"falafel":42}],41:[function(require,module,exports){
+},{"dup":31}],41:[function(require,module,exports){
 arguments[4][32][0].apply(exports,arguments)
-},{"./generate.js":39,"dup":32}],42:[function(require,module,exports){
+},{"dup":32,"falafel":43}],42:[function(require,module,exports){
 arguments[4][33][0].apply(exports,arguments)
-},{"dup":33,"esprima":43}],43:[function(require,module,exports){
+},{"./generate.js":40,"dup":33}],43:[function(require,module,exports){
 arguments[4][34][0].apply(exports,arguments)
-},{"dup":34}],44:[function(require,module,exports){
+},{"dup":34,"esprima":44}],44:[function(require,module,exports){
+arguments[4][35][0].apply(exports,arguments)
+},{"dup":35}],45:[function(require,module,exports){
 "use strict"
 
 var tools = require("./lib/tools.js")
@@ -10864,7 +11094,7 @@ module.exports.order    = order
 module.exports.size     = size
 module.exports.stride   = pstride
 module.exports.ctor     = makeView
-},{"./lib/tools.js":45,"./lib/viewn.js":46}],45:[function(require,module,exports){
+},{"./lib/tools.js":46,"./lib/viewn.js":47}],46:[function(require,module,exports){
 
 function compare1st(a, b) {
   return a[0] - b[0];
@@ -10886,7 +11116,7 @@ function order(stride) {
 exports.order = order;
 
 
-},{}],46:[function(require,module,exports){
+},{}],47:[function(require,module,exports){
 "use strict"
 
 var tools = require("./tools.js")
@@ -11121,7 +11351,7 @@ function CTOR(data, shape, stride, offset) {
 
 module.exports = CTOR
 
-},{"./tools.js":45}],47:[function(require,module,exports){
+},{"./tools.js":46}],48:[function(require,module,exports){
 "use strict"
 
 var bits = require("bit-twiddle")
@@ -11223,7 +11453,7 @@ function detectPitch(signal, options) {
   return period
 }
 module.exports = detectPitch
-},{"bit-twiddle":26,"ndarray":44,"ndarray-fft":27,"ndarray-ops":37,"typedarray-pool":52}],48:[function(require,module,exports){
+},{"bit-twiddle":27,"ndarray":45,"ndarray-fft":28,"ndarray-ops":38,"typedarray-pool":53}],49:[function(require,module,exports){
 "use strict"
 
 // Slices a stream of frames into a stream of overlapping windows
@@ -11264,7 +11494,7 @@ function createHopStream(frame_size, hop_size, onFrame, max_data_size) {
 
 module.exports = createHopStream
 
-},{}],49:[function(require,module,exports){
+},{}],50:[function(require,module,exports){
 "use strict"
 
 function overlapAdd(frame_size, hop_size, onFrame) {
@@ -11302,11 +11532,11 @@ function overlapAdd(frame_size, hop_size, onFrame) {
 }
 
 module.exports = overlapAdd
-},{}],50:[function(require,module,exports){
-arguments[4][26][0].apply(exports,arguments)
-},{"dup":26}],51:[function(require,module,exports){
-arguments[4][35][0].apply(exports,arguments)
-},{"dup":35}],52:[function(require,module,exports){
+},{}],51:[function(require,module,exports){
+arguments[4][27][0].apply(exports,arguments)
+},{"dup":27}],52:[function(require,module,exports){
+arguments[4][36][0].apply(exports,arguments)
+},{"dup":36}],53:[function(require,module,exports){
 (function (global){
 "use strict"
 
@@ -11591,7 +11821,7 @@ exports.clearCache = function clearCache() {
 }
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"bit-twiddle":50,"dup":51}],53:[function(require,module,exports){
+},{"bit-twiddle":51,"dup":52}],54:[function(require,module,exports){
 "use strict"
 
 var frameHop = require("frame-hop")
@@ -11730,11 +11960,11 @@ function pitchShift(onData, onTune, options) {
 }
 module.exports = pitchShift
 
-},{"detect-pitch":47,"frame-hop":48,"overlap-add":49,"typedarray-pool":52}],54:[function(require,module,exports){
-arguments[4][26][0].apply(exports,arguments)
-},{"dup":26}],55:[function(require,module,exports){
-arguments[4][35][0].apply(exports,arguments)
-},{"dup":35}],56:[function(require,module,exports){
+},{"detect-pitch":48,"frame-hop":49,"overlap-add":50,"typedarray-pool":53}],55:[function(require,module,exports){
+arguments[4][27][0].apply(exports,arguments)
+},{"dup":27}],56:[function(require,module,exports){
+arguments[4][36][0].apply(exports,arguments)
+},{"dup":36}],57:[function(require,module,exports){
 (function (global,Buffer){
 'use strict'
 
@@ -11951,7 +12181,7 @@ exports.clearCache = function clearCache() {
   }
 }
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {},require("buffer").Buffer)
-},{"bit-twiddle":54,"buffer":2,"dup":55}],57:[function(require,module,exports){
+},{"bit-twiddle":55,"buffer":2,"dup":56}],58:[function(require,module,exports){
 var waveformer = require('jsynth-waveform');
 var installCanvas = require('./install-canvas')
 var emitter = require('events').EventEmitter
@@ -12023,20 +12253,23 @@ function draw(parent, master){
   }
 }
 
-},{"./install-canvas":60,"events":6,"inherits":77,"jsynth-waveform":80}],58:[function(require,module,exports){
+},{"./install-canvas":61,"events":6,"inherits":78,"jsynth-waveform":81}],59:[function(require,module,exports){
 var on = require('dom-event')
 
+var nb = require('../nbfs') // note-bene
+nb.setStorage(5 * 1024 * 1024 * 1024)
 var uis = require('getids')
 var on = require('dom-event')
 var touchdown = require('touchdown')
 var drop = require('drag-drop/buffer')
 var ready = require('doc-ready')
 var hover = require('../mousearound')
+var resample = require('./resample.js')
 
 var sampler = require('./')
 var context = new AudioContext
 
-var ctrls = "<div id=ctrls class=ctrlbox>\n  <button id=$play class=play>&gt</button>\n  <button id=$pause class=pause>||</button>\n  <button id=$playloop class=playloop>|&#8212&gt</button>\n  <button id=$loop class=loop><span style=\"font-size:100%;line-height:0\">&#9775</span></button>\n  <button id=$setIn class=setin>&#254&#8212</button>\n  <button id=$setOut class=\"setout reverse\"><span sytyle=\"font-size:300%\">&#254</span>&#8212</button>\n  <button id=$slice class=slice>8&lt--</button>\n  <button id=$reverse class=reverse>R</button>\n  <input type=range min=0 max=10 value=1 step=.1 id=amplitude></input>\n  <input type=range min=0 max=2 value=1 step=.01 id=speed></input>\n  <input type=range min=0 max=5 value=1 step=.01 id=pitch></input>\n</div>\n"
+var ctrls = "<div id=ctrls class=ctrlbox>\n  <button id=$play class=play>&gt</button>\n  <button id=$pause class=pause>||</button>\n  <button id=$playloop class=playloop>|&#8212&gt</button>\n  <button id=$loop class=loop><span style=\"font-size:100%;line-height:0\">&#9775</span></button>\n  <button id=$setIn class=setin>&#254&#8212</button>\n  <button id=$setOut class=\"setout reverse\"><span sytyle=\"font-size:300%\">&#254</span>&#8212</button>\n  <button id=$slice class=slice>8&lt--</button>\n  <button id=$reverse class=reverse>R</button>\n  <input type=range min=0 max=10 value=1 step=.1 id=amplitude></input>\n  <input type=range min=0 max=2 value=1 step=.01 id=speed></input>\n  <input type=range min=0 max=2 value=1 step=.01 id=pitch></input>\n</div>\n"
 var div = document.createElement('div')
 div.innerHTML = ctrls
 ctrls = div.firstChild
@@ -12096,17 +12329,21 @@ function createSample(buff){
   })
   on(ui.$slice, 'touchdown', function(e){
     var cut = sample.slice()
+    var params = sample.getParams()
+    console.log(params)
+    cut = resample(context.sampleRate, cut, params)
+    console.log(cut)
     var _sample = createSample(cut)
     samples.push(cut)
   })
   return sample
 }
 
-},{"../mousearound":100,"./":59,"doc-ready":61,"dom-event":63,"drag-drop/buffer":64,"getids":76,"touchdown":84}],59:[function(require,module,exports){
+},{"../mousearound":131,"../nbfs":134,"./":60,"./resample.js":115,"doc-ready":62,"dom-event":64,"drag-drop/buffer":65,"getids":77,"touchdown":113}],60:[function(require,module,exports){
 var emitter = require('events').EventEmitter
 var inherits = require('inherits')
 inherits(sampler, emitter)
-
+var resample = require('./resample.js')
 var fileBuff = require('jsynth-file-sample')
 var streamBuff = require('../jsynth-stream-buf')
 var pitcher = require('../jsynth-pitch-shift')
@@ -12171,7 +12408,7 @@ function sampler (master, buff, parel, cb){
     }
   }
   self.speed = function(x){
-    self.source.playbackRate = x
+    self.playbackRate = self.source.playbackRate = x
   }
   self.reverse = function(){
     self.reversed = !self.reversed
@@ -12203,6 +12440,14 @@ function sampler (master, buff, parel, cb){
       fireSample(self.mono, self.pauseStart)
     }
   }
+  self.getParams = function(){
+    var p = {}
+    p.sampleRate = sr
+    p.speed = self.source.playbackRate
+    p.amplitude = self.source.gain
+    p.pitch = self.pitch
+    return p
+  }
   self.slice = function(i,o){
     i = i || self.source._loopStart || 0 
     o = o || self.source._loopEnd || self.source.buffer.length - 1
@@ -12222,18 +12467,19 @@ function sampler (master, buff, parel, cb){
   }
   fileBuff(master, buff, function(e, source){
     cb()
+    self.source = source  
     var tracks = []
     for(var x = 0; x < source.buffer.numberOfChannels; x++){
       tracks.push(source.buffer.getChannelData(x))
     }
     var mono = mergeTracks(tracks)
     self.mono = mono
+    source.playbackRate = 1
     touchdown.start(self.parent)
     on(self.parent, 'touchdown', curseHandle) // handler down below... 
     on(document,'keydown', function(evt){
       keydown(evt)
     })
-    self.source = source  
     self.source.loopStart = 0
     self.source.loopEnd = source.buffer.duration
     //on(parent, 'deltavector', curseHandle) 
@@ -12288,7 +12534,10 @@ function sampler (master, buff, parel, cb){
       s.loop = self.looping
       s.loopStart = self.loop ? self.source.loopStart : pos 
       s.loopEnd = self.source.loopEnd || self.source.buffer.duration
+      s.playbackRate= self.playbackRate
+      self.amplitude(self.source.gain) 
       s.onended = function(){
+
           console.log('ended')
         if(!(self.loop)) self.playing = false
         else {
@@ -12299,13 +12548,16 @@ function sampler (master, buff, parel, cb){
       self.startTime = master.currentTime
       self.timeOffset = -self.startTime + pos
       self.currentTime = self.startTime + pos
-      self.source = s
+      self.source = s;
       if(self.reversed) {
         self.reversed = false
         self.reverse()
       }
       s.connect(master.destination)
       s.start(0, pos, Math.pow(2, 16))
+      if(!(self.pitch === 1)){
+        self.setPitch(self.pitch)
+      }
       moveNeedle(self.inPos)
     })
 
@@ -12418,7 +12670,7 @@ function sampler (master, buff, parel, cb){
 
 
 
-},{"../jsynth-pitch-shift":25,"../jsynth-stream-buf":86,"./draw":57,"dom-event":63,"events":6,"getids":76,"inherits":77,"jbuffers":78,"jsynth-file-sample":79,"keycode":81,"touchdown":84}],60:[function(require,module,exports){
+},{"../jsynth-pitch-shift":26,"../jsynth-stream-buf":117,"./draw":58,"./resample.js":115,"dom-event":64,"events":6,"getids":77,"inherits":78,"jbuffers":79,"jsynth-file-sample":80,"keycode":82,"touchdown":113}],61:[function(require,module,exports){
 module.exports = function(parent){
   if(!parent) parent = document.body
   var index = []
@@ -12451,7 +12703,7 @@ function getCSS(el, prop){
 }
 
 
-},{}],61:[function(require,module,exports){
+},{}],62:[function(require,module,exports){
 /*!
  * docReady v1.0.3
  * Cross browser DOMContentLoaded event emitter
@@ -12525,7 +12777,7 @@ if ( typeof define === 'function' && define.amd ) {
 
 })( window );
 
-},{"eventie":62}],62:[function(require,module,exports){
+},{"eventie":63}],63:[function(require,module,exports){
 /*!
  * eventie v1.0.6
  * event binding helper
@@ -12609,7 +12861,7 @@ if ( typeof define === 'function' && define.amd ) {
 
 })( window );
 
-},{}],63:[function(require,module,exports){
+},{}],64:[function(require,module,exports){
 module.exports = on;
 module.exports.on = on;
 module.exports.off = off;
@@ -12626,7 +12878,7 @@ function off (element, event, callback, capture) {
   return callback;
 }
 
-},{}],64:[function(require,module,exports){
+},{}],65:[function(require,module,exports){
 module.exports = DragDropAsBuffer
 
 var dragDrop = require('./')
@@ -12654,7 +12906,7 @@ function DragDropAsBuffer (elem, cb) {
   })
 }
 
-},{"./":65,"blob-to-buffer":66,"run-parallel":72}],65:[function(require,module,exports){
+},{"./":66,"blob-to-buffer":67,"run-parallel":73}],66:[function(require,module,exports){
 module.exports = dragDrop
 
 var throttle = require('lodash.throttle')
@@ -12712,7 +12964,7 @@ function makeOnDrop (elem, cb) {
   }
 }
 
-},{"lodash.throttle":69}],66:[function(require,module,exports){
+},{"lodash.throttle":70}],67:[function(require,module,exports){
 var toBuffer = require('typedarray-to-buffer')
 
 module.exports = function blobToBuffer (blob, cb) {
@@ -12731,7 +12983,7 @@ module.exports = function blobToBuffer (blob, cb) {
   reader.readAsArrayBuffer(blob)
 }
 
-},{"typedarray-to-buffer":67}],67:[function(require,module,exports){
+},{"typedarray-to-buffer":68}],68:[function(require,module,exports){
 (function (Buffer){
 /**
  * Convert a typed array to a Buffer without a copy
@@ -12766,7 +13018,7 @@ module.exports = function (arr) {
 }
 
 }).call(this,require("buffer").Buffer)
-},{"buffer":2,"is-typedarray":68}],68:[function(require,module,exports){
+},{"buffer":2,"is-typedarray":69}],69:[function(require,module,exports){
 module.exports      = isTypedArray
 isTypedArray.strict = isStrictTypedArray
 isTypedArray.loose  = isLooseTypedArray
@@ -12807,7 +13059,7 @@ function isLooseTypedArray(arr) {
   return names[toString.call(arr)]
 }
 
-},{}],69:[function(require,module,exports){
+},{}],70:[function(require,module,exports){
 /**
  * lodash 3.0.2 (Custom Build) <https://lodash.com/>
  * Build: `lodash modern modularize exports="npm" -o ./`
@@ -12915,7 +13167,7 @@ function isObject(value) {
 
 module.exports = throttle;
 
-},{"lodash.debounce":70}],70:[function(require,module,exports){
+},{"lodash.debounce":71}],71:[function(require,module,exports){
 /**
  * lodash 3.0.3 (Custom Build) <https://lodash.com/>
  * Build: `lodash modern modularize exports="npm" -o ./`
@@ -13156,7 +13408,7 @@ function isObject(value) {
 
 module.exports = debounce;
 
-},{"lodash.isnative":71}],71:[function(require,module,exports){
+},{"lodash.isnative":72}],72:[function(require,module,exports){
 /**
  * lodash 3.0.2 (Custom Build) <https://lodash.com/>
  * Build: `lodash modern modularize exports="npm" -o ./`
@@ -13273,7 +13525,7 @@ function escapeRegExp(string) {
 
 module.exports = isNative;
 
-},{}],72:[function(require,module,exports){
+},{}],73:[function(require,module,exports){
 var dezalgo = require('dezalgo')
 
 module.exports = function (tasks, cb) {
@@ -13313,7 +13565,7 @@ module.exports = function (tasks, cb) {
   }
 }
 
-},{"dezalgo":73}],73:[function(require,module,exports){
+},{"dezalgo":74}],74:[function(require,module,exports){
 var wrappy = require('wrappy')
 module.exports = wrappy(dezalgo)
 
@@ -13337,7 +13589,7 @@ function dezalgo (cb) {
   }
 }
 
-},{"asap":74,"wrappy":75}],74:[function(require,module,exports){
+},{"asap":75,"wrappy":76}],75:[function(require,module,exports){
 (function (process){
 
 // Use the fastest possible means to execute a task in a future turn
@@ -13454,7 +13706,7 @@ module.exports = asap;
 
 
 }).call(this,require('_process'))
-},{"_process":9}],75:[function(require,module,exports){
+},{"_process":10}],76:[function(require,module,exports){
 // Returns a wrapper function that returns a wrapped callback
 // The wrapper function should do some stuff, and return a
 // presumably different callback function.
@@ -13489,7 +13741,7 @@ function wrappy (fn, cb) {
   }
 }
 
-},{}],76:[function(require,module,exports){
+},{}],77:[function(require,module,exports){
 module.exports = function(el){
 
     var ids = {};
@@ -13514,9 +13766,9 @@ module.exports = function(el){
 
 }
 
-},{}],77:[function(require,module,exports){
+},{}],78:[function(require,module,exports){
 arguments[4][7][0].apply(exports,arguments)
-},{"dup":7}],78:[function(require,module,exports){
+},{"dup":7}],79:[function(require,module,exports){
 var Buffer = Buffer;
 
 var types = [
@@ -13803,7 +14055,7 @@ Buffers.prototype.toString = function(encoding, start, end) {
     return this.slice(start, end).toString(encoding);
 }
 
-},{}],79:[function(require,module,exports){
+},{}],80:[function(require,module,exports){
 // handles audio files and raw, mono, audio buffers
 
 module.exports = function(context, buff, cb){
@@ -13852,7 +14104,7 @@ module.exports = function(context, buff, cb){
   }
 }
 
-},{}],80:[function(require,module,exports){
+},{}],81:[function(require,module,exports){
 module.exports = function(opts){
 
   var ctx = opts.canvas.getContext('2d');
@@ -13968,7 +14220,7 @@ function avg(opts){
     return results 
 }
 
-},{}],81:[function(require,module,exports){
+},{}],82:[function(require,module,exports){
 // Source: http://jsfiddle.net/vWx8V/
 // http://stackoverflow.com/questions/5603195/full-list-of-javascript-keycodes
 
@@ -14117,7 +14369,63 @@ for (var alias in aliases) {
   codes[alias] = aliases[alias]
 }
 
-},{}],82:[function(require,module,exports){
+},{}],83:[function(require,module,exports){
+arguments[4][27][0].apply(exports,arguments)
+},{"dup":27}],84:[function(require,module,exports){
+arguments[4][28][0].apply(exports,arguments)
+},{"./lib/fft-matrix.js":85,"cwise":86,"dup":28,"ndarray":101,"ndarray-ops":94,"typedarray-pool":93}],85:[function(require,module,exports){
+arguments[4][29][0].apply(exports,arguments)
+},{"bit-twiddle":83,"dup":29}],86:[function(require,module,exports){
+arguments[4][30][0].apply(exports,arguments)
+},{"./lib/parser.js":88,"./lib/shim.js":89,"dup":30}],87:[function(require,module,exports){
+arguments[4][31][0].apply(exports,arguments)
+},{"dup":31}],88:[function(require,module,exports){
+arguments[4][32][0].apply(exports,arguments)
+},{"dup":32,"falafel":90}],89:[function(require,module,exports){
+arguments[4][33][0].apply(exports,arguments)
+},{"./generate.js":87,"dup":33}],90:[function(require,module,exports){
+arguments[4][34][0].apply(exports,arguments)
+},{"dup":34,"esprima":91}],91:[function(require,module,exports){
+arguments[4][35][0].apply(exports,arguments)
+},{"dup":35}],92:[function(require,module,exports){
+arguments[4][36][0].apply(exports,arguments)
+},{"dup":36}],93:[function(require,module,exports){
+arguments[4][37][0].apply(exports,arguments)
+},{"bit-twiddle":83,"dup":37}],94:[function(require,module,exports){
+arguments[4][38][0].apply(exports,arguments)
+},{"cwise":95,"dup":38,"ndarray":101}],95:[function(require,module,exports){
+arguments[4][30][0].apply(exports,arguments)
+},{"./lib/parser.js":97,"./lib/shim.js":98,"dup":30}],96:[function(require,module,exports){
+arguments[4][31][0].apply(exports,arguments)
+},{"dup":31}],97:[function(require,module,exports){
+arguments[4][32][0].apply(exports,arguments)
+},{"dup":32,"falafel":99}],98:[function(require,module,exports){
+arguments[4][33][0].apply(exports,arguments)
+},{"./generate.js":96,"dup":33}],99:[function(require,module,exports){
+arguments[4][34][0].apply(exports,arguments)
+},{"dup":34,"esprima":100}],100:[function(require,module,exports){
+arguments[4][35][0].apply(exports,arguments)
+},{"dup":35}],101:[function(require,module,exports){
+arguments[4][45][0].apply(exports,arguments)
+},{"./lib/tools.js":102,"./lib/viewn.js":103,"dup":45}],102:[function(require,module,exports){
+arguments[4][46][0].apply(exports,arguments)
+},{"dup":46}],103:[function(require,module,exports){
+arguments[4][47][0].apply(exports,arguments)
+},{"./tools.js":102,"dup":47}],104:[function(require,module,exports){
+arguments[4][48][0].apply(exports,arguments)
+},{"bit-twiddle":83,"dup":48,"ndarray":101,"ndarray-fft":84,"ndarray-ops":94,"typedarray-pool":109}],105:[function(require,module,exports){
+arguments[4][49][0].apply(exports,arguments)
+},{"dup":49}],106:[function(require,module,exports){
+arguments[4][50][0].apply(exports,arguments)
+},{"dup":50}],107:[function(require,module,exports){
+arguments[4][27][0].apply(exports,arguments)
+},{"dup":27}],108:[function(require,module,exports){
+arguments[4][36][0].apply(exports,arguments)
+},{"dup":36}],109:[function(require,module,exports){
+arguments[4][53][0].apply(exports,arguments)
+},{"bit-twiddle":107,"dup":53}],110:[function(require,module,exports){
+arguments[4][54][0].apply(exports,arguments)
+},{"detect-pitch":104,"dup":54,"frame-hop":105,"overlap-add":106,"typedarray-pool":109}],111:[function(require,module,exports){
 //     uuid.js
 //
 //     Copyright (c) 2010-2012 Robert Kieffer
@@ -14366,7 +14674,7 @@ for (var alias in aliases) {
   }
 }).call(this);
 
-},{}],83:[function(require,module,exports){
+},{}],112:[function(require,module,exports){
 /**
  * Merge object b with object a.
  *
@@ -14391,7 +14699,7 @@ exports = module.exports = function(a, b){
   return a;
 };
 
-},{}],84:[function(require,module,exports){
+},{}],113:[function(require,module,exports){
 var touchy = require('./touchy.js')
 ,   uuid = require('node-uuid')
 ,   merge = require('utils-merge')
@@ -14646,7 +14954,7 @@ touch.prototype.handleMouse = function(x){
 
 
 
-},{"./touchy.js":85,"node-uuid":82,"utils-merge":83}],85:[function(require,module,exports){
+},{"./touchy.js":114,"node-uuid":111,"utils-merge":112}],114:[function(require,module,exports){
 /* Modernizr 2.6.2 (Custom Build) | MIT & BSD
  * Build: http://modernizr.com/download/#-touch-teststyles-prefixes
  */
@@ -15389,7 +15697,316 @@ Touchy.startWindowBounce = function () {
 
 module.exports = Touchy;
 
-},{}],86:[function(require,module,exports){
+},{}],115:[function(require,module,exports){
+var Resample = require('./resampler.js')
+var shift = require('pitch-shift')
+var jbuffers = require('jbuffers')
+var frame_size = 512 * 2
+var hop = 256 
+
+
+module.exports = function(sr, buf, params){
+
+  if(!(sr === params.sampleRate) && params.sampleRate) {
+    console.log('samplerate') 
+    var resample = new Resample(sr, params.sampleRate, 1, buf.length * sr / params.sampleRate)
+    var buf = resample.resampler(buf)
+    sr = params.sampleRate
+  }
+  
+  if(!(params.pitch === 1) && params.pitch){
+
+    console.log('pitch', params.pitch) 
+    var queue = jbuffers(6)
+    var q = 1, e = Math.floor(buf.length / frame_size)
+    var shifter = shift(function(data){
+      var pusher = new Float32Array(frame_size)
+      pusher.set(data)
+      queue.push(pusher)
+
+    }, function(t){ return params.pitch}, {
+      frameSize: frame_size,
+      hopSize: hop,
+      sampleRate: sr,
+      freqThreshold: .9,
+      harmonicScale: .2
+    }) 
+  
+    for(var x = 0; x < e; x++){
+      shifter(new Float32Array(Array.prototype.slice.call(buf, x * frame_size, x * frame_size + frame_size)))
+    }
+ 
+    buf = queue.toBuffer()
+
+  }
+  if(!(params.amplitude === 1) && params.amplitude){
+    console.log('amp') 
+    buf = amp(buf, params.amplitude)
+  }
+
+  if(!(params.speed === 1) && params.speed){
+    console.log('speed') 
+    //buf = thrash(buf, params.speed)
+    //  not ideal but should work for now
+    var resample = new Resample(sr, sr / params.speed, 1, buf.length / params.speed)
+    var buf = resample.resampler(buf)
+    sr = params.sampleRate
+  }
+  
+  return buf
+}
+
+function thrash(_track, div, ac, offset){
+  var track = new Float32Array(Math.floor(_track.length / div))
+  for(var x = 0; x < track.length; x++){
+    var y = 0
+    for(var z = 0; z < div; z++){
+      y += _track[x * z]
+    }
+    track[x] = y / div
+  }
+  if(ac){
+    var tt = new Float32Array(Math.floor(_track.length / ac))
+    offset = tt.length * offset 
+    tt.set(track, offset || 0)
+    return tt
+  }else return track 
+}
+
+function amp(buf, a){
+  Array.prototype.forEach.call(buf, function(e, i){
+    buf[i] = e * a
+  })
+  return buf
+}
+
+function mergeTracks(tracks, a){
+  a = a || 1
+  var track = new Float32Array(tracks[0].length)
+  for(var x = 0; x < track.length; x++){
+    var y = 0
+      for(var z = 0; z < tracks.length; z++){
+        y += tracks[z][x] 
+      }
+    track[x] = y / tracks.length * a
+  }
+  return track
+}
+
+},{"./resampler.js":116,"jbuffers":79,"pitch-shift":110}],116:[function(require,module,exports){
+//JavaScript Audio Resampler (c) 2011 - Grant Galitz
+module.exports = Resampler
+
+function Resampler(fromSampleRate, toSampleRate, channels, outputBufferSize, noReturn) {
+	this.fromSampleRate = fromSampleRate;
+	this.toSampleRate = toSampleRate;
+	this.channels = channels | 0;
+	this.outputBufferSize = outputBufferSize;
+	this.noReturn = !!noReturn;
+	this.initialize();
+}
+
+Resampler.prototype.initialize = function () {
+	//Perform some checks:
+	if (this.fromSampleRate > 0 && this.toSampleRate > 0 && this.channels > 0) {
+		if (this.fromSampleRate == this.toSampleRate) {
+			//Setup a resampler bypass:
+			this.resampler = this.bypassResampler;		//Resampler just returns what was passed through.
+			this.ratioWeight = 1;
+		}
+		else {
+			if (this.fromSampleRate < this.toSampleRate) {
+				/*
+					Use generic linear interpolation if upsampling,
+					as linear interpolation produces a gradient that we want
+					and works fine with two input sample points per output in this case.
+				*/
+				this.compileLinearInterpolationFunction();
+				this.lastWeight = 1;
+			}
+			else {
+				/*
+					Custom resampler I wrote that doesn't skip samples
+					like standard linear interpolation in high downsampling.
+					This is more accurate than linear interpolation on downsampling.
+				*/
+				this.compileMultiTapFunction();
+				this.tailExists = false;
+				this.lastWeight = 0;
+			}
+			this.ratioWeight = this.fromSampleRate / this.toSampleRate;
+			this.initializeBuffers();
+		}
+	}
+	else {
+		throw(new Error("Invalid settings specified for the resampler."));
+	}
+}
+Resampler.prototype.compileLinearInterpolationFunction = function () {
+	var toCompile = "var bufferLength = buffer.length;\
+	var outLength = this.outputBufferSize;\
+	if ((bufferLength % " + this.channels + ") == 0) {\
+		if (bufferLength > 0) {\
+			var ratioWeight = this.ratioWeight;\
+			var weight = this.lastWeight;\
+			var firstWeight = 0;\
+			var secondWeight = 0;\
+			var sourceOffset = 0;\
+			var outputOffset = 0;\
+			var outputBuffer = this.outputBuffer;\
+			for (; weight < 1; weight += ratioWeight) {\
+				secondWeight = weight % 1;\
+				firstWeight = 1 - secondWeight;";
+	for (var channel = 0; channel < this.channels; ++channel) {
+		toCompile += "outputBuffer[outputOffset++] = (this.lastOutput[" + channel + "] * firstWeight) + (buffer[" + channel + "] * secondWeight);";
+	}
+	toCompile += "}\
+			weight -= 1;\
+			for (bufferLength -= " + this.channels + ", sourceOffset = Math.floor(weight) * " + this.channels + "; outputOffset < outLength && sourceOffset < bufferLength;) {\
+				secondWeight = weight % 1;\
+				firstWeight = 1 - secondWeight;";
+	for (var channel = 0; channel < this.channels; ++channel) {
+		toCompile += "outputBuffer[outputOffset++] = (buffer[sourceOffset" + ((channel > 0) ? (" + " + channel) : "") + "] * firstWeight) + (buffer[sourceOffset + " + (this.channels + channel) + "] * secondWeight);";
+	}
+	toCompile += "weight += ratioWeight;\
+				sourceOffset = Math.floor(weight) * " + this.channels + ";\
+			}";
+	for (var channel = 0; channel < this.channels; ++channel) {
+		toCompile += "this.lastOutput[" + channel + "] = buffer[sourceOffset++];";
+	}
+	toCompile += "this.lastWeight = weight % 1;\
+			return this.bufferSlice(outputOffset);\
+		}\
+		else {\
+			return (this.noReturn) ? 0 : [];\
+		}\
+	}\
+	else {\
+		throw(new Error(\"Buffer was of incorrect sample length.\"));\
+	}";
+	this.resampler = Function("buffer", toCompile);
+}
+Resampler.prototype.compileMultiTapFunction = function () {
+	var toCompile = "var bufferLength = buffer.length;\
+	var outLength = this.outputBufferSize;\
+	if ((bufferLength % " + this.channels + ") == 0) {\
+		if (bufferLength > 0) {\
+			var ratioWeight = this.ratioWeight;\
+			var weight = 0;";
+	for (var channel = 0; channel < this.channels; ++channel) {
+		toCompile += "var output" + channel + " = 0;"
+	}
+	toCompile += "var actualPosition = 0;\
+			var amountToNext = 0;\
+			var alreadyProcessedTail = !this.tailExists;\
+			this.tailExists = false;\
+			var outputBuffer = this.outputBuffer;\
+			var outputOffset = 0;\
+			var currentPosition = 0;\
+			do {\
+				if (alreadyProcessedTail) {\
+					weight = ratioWeight;";
+	for (channel = 0; channel < this.channels; ++channel) {
+		toCompile += "output" + channel + " = 0;"
+	}
+	toCompile += "}\
+				else {\
+					weight = this.lastWeight;";
+	for (channel = 0; channel < this.channels; ++channel) {
+		toCompile += "output" + channel + " = this.lastOutput[" + channel + "];"
+	}
+	toCompile += "alreadyProcessedTail = true;\
+				}\
+				while (weight > 0 && actualPosition < bufferLength) {\
+					amountToNext = 1 + actualPosition - currentPosition;\
+					if (weight >= amountToNext) {";
+	for (channel = 0; channel < this.channels; ++channel) {
+		toCompile += "output" + channel + " += buffer[actualPosition++] * amountToNext;"
+	}
+	toCompile += "currentPosition = actualPosition;\
+						weight -= amountToNext;\
+					}\
+					else {";
+	for (channel = 0; channel < this.channels; ++channel) {
+		toCompile += "output" + channel + " += buffer[actualPosition" + ((channel > 0) ? (" + " + channel) : "") + "] * weight;"
+	}
+	toCompile += "currentPosition += weight;\
+						weight = 0;\
+						break;\
+					}\
+				}\
+				if (weight == 0) {";
+	for (channel = 0; channel < this.channels; ++channel) {
+		toCompile += "outputBuffer[outputOffset++] = output" + channel + " / ratioWeight;"
+	}
+	toCompile += "}\
+				else {\
+					this.lastWeight = weight;";
+	for (channel = 0; channel < this.channels; ++channel) {
+		toCompile += "this.lastOutput[" + channel + "] = output" + channel + ";"
+	}
+	toCompile += "this.tailExists = true;\
+					break;\
+				}\
+			} while (actualPosition < bufferLength && outputOffset < outLength);\
+			return this.bufferSlice(outputOffset);\
+		}\
+		else {\
+			return (this.noReturn) ? 0 : [];\
+		}\
+	}\
+	else {\
+		throw(new Error(\"Buffer was of incorrect sample length.\"));\
+	}";
+	this.resampler = Function("buffer", toCompile);
+}
+Resampler.prototype.bypassResampler = function (buffer) {
+	if (this.noReturn) {
+		//Set the buffer passed as our own, as we don't need to resample it:
+		this.outputBuffer = buffer;
+		return buffer.length;
+	}
+	else {
+		//Just return the buffer passsed:
+		return buffer;
+	}
+}
+Resampler.prototype.bufferSlice = function (sliceAmount) {
+	if (this.noReturn) {
+		//If we're going to access the properties directly from this object:
+		return sliceAmount;
+	}
+	else {
+		//Typed array and normal array buffer section referencing:
+		try {
+			return this.outputBuffer.subarray(0, sliceAmount);
+		}
+		catch (error) {
+			try {
+				//Regular array pass:
+				this.outputBuffer.length = sliceAmount;
+				return this.outputBuffer;
+			}
+			catch (error) {
+				//Nightly Firefox 4 used to have the subarray function named as slice:
+				return this.outputBuffer.slice(0, sliceAmount);
+			}
+		}
+	}
+}
+Resampler.prototype.initializeBuffers = function () {
+	//Initialize the internal buffer:
+	try {
+		this.outputBuffer = new Float32Array(this.outputBufferSize);
+		this.lastOutput = new Float32Array(this.channels);
+	}
+	catch (error) {
+		this.outputBuffer = [];
+		this.lastOutput = [];
+	}
+}
+
+},{}],117:[function(require,module,exports){
 var buffers = require('jbuffers')
 var through = require('through2')
 var jsynth = require('../jsynth')
@@ -15564,11 +16181,11 @@ module.exports = function(master, _buffer, cb, size){
 
 
 
-},{"../jsynth":99,"jbuffers":87,"through2":98}],87:[function(require,module,exports){
-arguments[4][78][0].apply(exports,arguments)
-},{"dup":78}],88:[function(require,module,exports){
-arguments[4][11][0].apply(exports,arguments)
-},{"./_stream_readable":89,"./_stream_writable":91,"_process":9,"core-util-is":92,"dup":11,"inherits":93}],89:[function(require,module,exports){
+},{"../jsynth":130,"jbuffers":118,"through2":129}],118:[function(require,module,exports){
+arguments[4][79][0].apply(exports,arguments)
+},{"dup":79}],119:[function(require,module,exports){
+arguments[4][12][0].apply(exports,arguments)
+},{"./_stream_readable":120,"./_stream_writable":122,"_process":10,"core-util-is":123,"dup":12,"inherits":124}],120:[function(require,module,exports){
 (function (process){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -16554,7 +17171,7 @@ function indexOf (xs, x) {
 }
 
 }).call(this,require('_process'))
-},{"_process":9,"buffer":2,"core-util-is":92,"events":6,"inherits":93,"isarray":94,"stream":21,"string_decoder/":95}],90:[function(require,module,exports){
+},{"_process":10,"buffer":2,"core-util-is":123,"events":6,"inherits":124,"isarray":125,"stream":22,"string_decoder/":126}],121:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -16766,7 +17383,7 @@ function done(stream, er) {
   return stream.push(null);
 }
 
-},{"./_stream_duplex":88,"core-util-is":92,"inherits":93}],91:[function(require,module,exports){
+},{"./_stream_duplex":119,"core-util-is":123,"inherits":124}],122:[function(require,module,exports){
 (function (process){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -17156,17 +17773,17 @@ function endWritable(stream, state, cb) {
 }
 
 }).call(this,require('_process'))
-},{"./_stream_duplex":88,"_process":9,"buffer":2,"core-util-is":92,"inherits":93,"stream":21}],92:[function(require,module,exports){
-arguments[4][16][0].apply(exports,arguments)
-},{"buffer":2,"dup":16}],93:[function(require,module,exports){
+},{"./_stream_duplex":119,"_process":10,"buffer":2,"core-util-is":123,"inherits":124,"stream":22}],123:[function(require,module,exports){
+arguments[4][17][0].apply(exports,arguments)
+},{"buffer":2,"dup":17}],124:[function(require,module,exports){
 arguments[4][7][0].apply(exports,arguments)
-},{"dup":7}],94:[function(require,module,exports){
+},{"dup":7}],125:[function(require,module,exports){
 arguments[4][8][0].apply(exports,arguments)
-},{"dup":8}],95:[function(require,module,exports){
-arguments[4][22][0].apply(exports,arguments)
-},{"buffer":2,"dup":22}],96:[function(require,module,exports){
-arguments[4][19][0].apply(exports,arguments)
-},{"./lib/_stream_transform.js":90,"dup":19}],97:[function(require,module,exports){
+},{"dup":8}],126:[function(require,module,exports){
+arguments[4][23][0].apply(exports,arguments)
+},{"buffer":2,"dup":23}],127:[function(require,module,exports){
+arguments[4][20][0].apply(exports,arguments)
+},{"./lib/_stream_transform.js":121,"dup":20}],128:[function(require,module,exports){
 module.exports = extend
 
 function extend() {
@@ -17185,7 +17802,7 @@ function extend() {
     return target
 }
 
-},{}],98:[function(require,module,exports){
+},{}],129:[function(require,module,exports){
 (function (process){
 var Transform = require('readable-stream/transform')
   , inherits  = require('util').inherits
@@ -17285,7 +17902,7 @@ module.exports.obj = through2(function (options, transform, flush) {
 })
 
 }).call(this,require('_process'))
-},{"_process":9,"readable-stream/transform":96,"util":24,"xtend":97}],99:[function(require,module,exports){
+},{"_process":10,"readable-stream/transform":127,"util":25,"xtend":128}],130:[function(require,module,exports){
 module.exports = function (context, fn, bufSize) {
 
     if (typeof context === 'function') {
@@ -17399,7 +18016,7 @@ function signed (n) {
     ;
 }
 
-},{}],100:[function(require,module,exports){
+},{}],131:[function(require,module,exports){
 var close = require('closeness')
 
 module.exports = function(node, points, fn){
@@ -17523,10 +18140,573 @@ function findPos(obj) {
   };
 };
 
-},{"closeness":101}],101:[function(require,module,exports){
+},{"closeness":132}],132:[function(require,module,exports){
 module.exports = function(num, dist){
 	return function(val){
 		return (Math.abs(num - val) < dist)
 	}
 };
-},{}]},{},[58]);
+},{}],133:[function(require,module,exports){
+(function (process){
+var Stream = require('stream')
+
+// through
+//
+// a stream that does nothing but re-emit the input.
+// useful for aggregating a series of changing but not ending streams into one stream)
+
+exports = module.exports = through
+through.through = through
+
+//create a readable writable stream.
+
+function through (write, end, opts) {
+  write = write || function (data) { this.queue(data) }
+  end = end || function () { this.queue(null) }
+
+  var ended = false, destroyed = false, buffer = [], _ended = false
+  var stream = new Stream()
+  stream.readable = stream.writable = true
+  stream.paused = false
+
+//  stream.autoPause   = !(opts && opts.autoPause   === false)
+  stream.autoDestroy = !(opts && opts.autoDestroy === false)
+
+  stream.write = function (data) {
+    write.call(this, data)
+    return !stream.paused
+  }
+
+  function drain() {
+    while(buffer.length && !stream.paused) {
+      var data = buffer.shift()
+      if(null === data)
+        return stream.emit('end')
+      else
+        stream.emit('data', data)
+    }
+  }
+
+  stream.queue = stream.push = function (data) {
+//    console.error(ended)
+    if(_ended) return stream
+    if(data == null) _ended = true
+    buffer.push(data)
+    drain()
+    return stream
+  }
+
+  //this will be registered as the first 'end' listener
+  //must call destroy next tick, to make sure we're after any
+  //stream piped from here.
+  //this is only a problem if end is not emitted synchronously.
+  //a nicer way to do this is to make sure this is the last listener for 'end'
+
+  stream.on('end', function () {
+    stream.readable = false
+    if(!stream.writable && stream.autoDestroy)
+      process.nextTick(function () {
+        stream.destroy()
+      })
+  })
+
+  function _end () {
+    stream.writable = false
+    end.call(stream)
+    if(!stream.readable && stream.autoDestroy)
+      stream.destroy()
+  }
+
+  stream.end = function (data) {
+    if(ended) return
+    ended = true
+    if(arguments.length) stream.write(data)
+    _end() // will emit or queue
+    return stream
+  }
+
+  stream.destroy = function () {
+    if(destroyed) return
+    destroyed = true
+    ended = true
+    buffer.length = 0
+    stream.writable = stream.readable = false
+    stream.emit('close')
+    return stream
+  }
+
+  stream.pause = function () {
+    if(stream.paused) return
+    stream.paused = true
+    return stream
+  }
+
+  stream.resume = function () {
+    if(stream.paused) {
+      stream.paused = false
+      stream.emit('resume')
+    }
+    drain()
+    //may have become paused again,
+    //as drain emits 'data'.
+    if(!stream.paused)
+      stream.emit('drain')
+    return stream
+  }
+  return stream
+}
+
+
+}).call(this,require('_process'))
+},{"_process":10,"stream":22}],134:[function(require,module,exports){
+(function (process){
+var through = require('through');
+var path = require('path');
+
+var FILESYSTEM = null;
+var TYPE = 1;
+var SIZE = 1024 * 1024 * 1024 * 5;
+
+getFileSystem(function(){})
+
+var FS = module.exports
+
+FS.createWriteStream = createWriteStream
+FS.readdir = readdir
+FS.mkdir = mkdir
+FS.rmdir = rmdir
+FS.createReadStream = createReadStream
+FS.write = write
+FS.writeFile = writeFile
+FS.readFile = readFile
+FS.unlink = unlink
+FS.rename = rename
+FS.mv = rename
+FS.setStorage = setStorage
+FS.stat = stat
+
+function write(path, buffer, offset, length, pos, cb){
+	switch ('function'){
+		case typeof buffer:
+			throw new Error('Buffer must be a string or array')
+			break;
+		case typeof offset:
+			cb = offset
+			offset = 0
+			length = null
+			pos = null
+			break;
+		case typeof length:
+				cb = length;
+				length = null
+				pos = null
+			break;
+		case typeof pos:
+				cb = pos;
+				pos = null;
+			break;
+	}
+	cb = maybeCallback(cb);
+	getFileSystem(function(err, fs){
+		if(err) {
+			cb(err, null)
+			return
+		}
+		fs.root.getFile(path, {create: true}, success, error)
+		function success(fileEntry){
+			fileEntry.createWriter(function(writer){
+				if(pos) writer.seek(pos)
+				var _buf = null;
+				var l = buffer.length || buffer.byteLength;
+				if(offset || length) {
+					_buf = buffer.slice(offset, length)
+					l = length
+					console.log(_buf)
+
+				}
+				writer.write(new Blob([_buf || buffer]))
+				cb(null, l, buffer)
+			}, error)
+		}
+		function error(err){
+			cb(err, null)
+		}	
+	})
+}
+
+function writeFile(path, data, opts, cb){
+	var encoding = 'utf8';
+	if(typeof opts == 'string'){
+		encoding = String(opts).toLowerCase();
+		opts = Object.create(null)
+	}
+	if(typeof opts == 'function'){
+		cb = opts;
+		opts = Object.create(null);
+		encoding = 'utf8';
+	}
+	FS.write(path, data, 0, null, null, cb)
+}
+
+function readFile(path, opts, cb){
+	var encoding = 'utf8';
+	if(typeof opts == 'string'){
+		encoding = String(opts).toLowerCase();
+		opts = Object.create(null)
+	}
+	if(typeof opts == 'function'){
+		cb = opts;
+		opts = Object.create(null);
+		encoding = 'utf8';
+	}
+	cb = maybeCallback(cb)
+	opts = opts || Object.create(null)
+	
+	getFileSystem(function(err, fs){
+		if(err) {
+			cb(err, null)
+			return
+		}
+
+		fs.root.getFile(path, {create: opts.create || false}, success, error)
+		function success(fileEntry){
+			fileEntry.file(function(file){
+				var reader = new FileReader();
+				var readType = 'readAsText';
+				var type = {type: ''};
+			
+				switch(encoding){
+					case 'base64':
+					case 'base-64':
+						type.type = 'application/base64'
+						break;
+					case 'utf8':
+					case 'utf-8':
+					  type.type = 'text/plain;charset=UTF-8'
+						break;
+					case 'uri':
+					case 'url':
+						readType = 'readAsDataURL'
+						break;
+					case null:
+					case 'arraybuffer':
+						readType = 'readAsArrayBuffer'
+						break;
+				}
+				reader.onloadend = function(evt){					
+					cb(null, this.result)
+				}
+				reader[readType](file)
+			}, error)
+		}
+		function error(err){
+			cb(err, null)
+		}
+	})
+}
+
+function stat(path, cb, create){
+	getFileSystem(function(err, fs){
+		if(err) {
+			cb(err, null)
+			return
+		}
+		fs.root.getFile(path, {create: create || false}, success, error)
+		function success(fileEntry){
+			cb(null, fileEntry)
+		}
+		function error(err){
+			cb(err, null)
+		}
+	})
+}
+
+
+function rename(from, to, cb){
+	var toDir = path.dirname(to)
+	var fromName = path.basename(from);
+	var toName = path.basename(to);
+	getFileSystem(function(err, fs){
+		if(err) return error(err)
+		fs.root.getFile(from, {create: true}, success, error)
+		function success(fileEntry){
+			fileEntry.moveTo(toDir, toName, undefined, function(){
+				cb&&cb(null)
+			}, error)
+		}
+		function error(err){
+			cb&&cb(err)
+		}
+	})
+}
+
+
+function readdir(path, cb, create){
+	getFileSystem(function(err, fs){
+		if(err) {
+			cb(err, null)
+			return
+		}
+		fs.root.getDirectory(path, {create: create || false}, success, error)
+	
+		function success(dir){
+			var reader = dir.createReader();
+			reader.readEntries(function(results){
+				cb(null, results)
+			}, error)
+		}
+	
+		function error(err){
+			cb(err, null)
+		}
+	})
+}
+
+function mkdir(path, cb){
+	
+	getFileSystem(function(err, fs){
+		if(err) {
+			cb(err, null)
+			return
+		}
+
+		fs.root.getDirectory(path, {create: true}, success, error);
+
+		function success(dir){
+			cb(null, dir)
+		}
+
+		function error(err){
+			cb(err, null)
+		}	
+	})
+}
+
+function rmdir(path, cb){
+	
+	getFileSystem(function(err, fs){
+		if(err) {
+			cb(err, null)
+			return
+		}
+		
+		fs.root.getDirectory(path, {create: false}, success, error);
+
+		function success(dir){
+			dir.remove(function(){
+				cb(null)
+			}, error)
+		}
+
+		function error(err){
+			cb(err, null)
+		}
+	})
+}
+
+function createReadStream(path, opts){
+	
+	var encoding = null;
+	if(typeof opts == 'string'){
+		encoding = String(opts).toLowerCase();
+		opts = Object.create(null)
+	}
+	
+	opts = opts || Object.create(null)
+	
+	var stream = through()
+
+	stream.pause()
+	
+	getFileSystem(function(err, fs){
+		if(err) {
+			cb(err, null)
+			return
+		}
+	
+		fs.root.getFile(path, {create: opts.create || false}, success, error)
+		
+		function success(fileEntry){
+			stream.url = fileEntry.toURL()
+
+			var readType = 'readAsText';
+			var type = {type: ''};
+		
+			fileEntry.file(function(file){
+				switch(encoding){
+					case 'base64':
+					case 'base-64':
+						type.type = 'application/base64'
+						break;
+					case 'utf8':
+					case 'utf-8':
+					  type.type = 'text/plain;charset=UTF-8'
+						break;
+					case 'uri':
+					case 'url':
+						readType = 'readAsDataURL'
+						break;
+					case null:
+					case 'arraybuffer':
+						readType = 'readAsArrayBuffer'
+						break;
+				}
+
+				var reader = new FileReader();
+				var loaded = 0;
+				var fileSize = 0;
+				reader.onloadstart = function(evt){
+					if(evt.lengthComputable) fileSize = evt.total;
+					stream.emit('loadstart')
+					stream.emit('open')
+				}
+				reader.onprogress = function(evt){
+					var chunkSize = evt.loaded - loaded;
+					stream.emit('data', this.result.slice(loaded, loaded + chunkSize))
+					loaded += evt.loaded;
+				}
+				reader.onloadend = function(evt){
+					stream.emit('end')
+				}
+				reader[readType](file, type)
+			})
+		}
+
+		function error(err){
+			stream.emit('error', err)
+		}
+	})
+	return stream
+	
+}
+
+function createWriteStream(filePath, opts){
+	
+	var stream = through()
+
+  stream.pause()
+	
+	getFileSystem(function(err, fs){
+		if(err) {
+			cb(err, null)
+			return
+		}
+
+    opts = opts || {}
+		
+    fs.root.getFile(filePath, {create: opts.create || true}, success, error)
+
+    function error(err){ stream.emit('error', err) }
+
+		function success(fileEntry){
+			
+      stream.url = fileEntry.toURL()
+      stream.emit('open')
+
+      fileEntry.createWriter(function(fileWriter) {
+
+        stream.on('end', function(){
+          process.nextTick(function(){
+            if (fileWriter.readyState !== fileWriter.DONE){
+                fileWriter.onwriteend = function(){
+                stream.emit('close')
+              }
+            } else {
+              stream.emit('close')
+            }
+          })
+        })
+
+        if (opts.start){
+          fileWriter.seek(opts.start)
+        } else if (opts.flags == 'r+') {
+          fileWriter.seek(fileWriter.length)
+        }
+
+				fileWriter.onerror = function(err){
+					stream.emit('error', err)
+				}
+				
+				fileWriter.onwriteend = function(evt){
+					if(fileWriter.readyState = fileWriter.DONE) stream.resume()
+				}
+
+        stream.on('data', function(data){
+          var blob = new Blob([data])
+          fileWriter.write(blob);
+					if(fileWriter.readyState == fileWriter.WRITING) stream.pause()
+        })
+
+        stream.resume()
+      }, error)
+
+    }
+	})
+	return stream
+  
+}
+
+function unlink(path, cb){
+	getFileSystem(function(err, fs){
+		if(err) {
+			cb(err, null)
+			return
+		}
+		fs.root.getFile(path, {create: false}, function(fileEntry){
+			fileEntry.remove(function(){
+				cb&&cb(null)
+			}, error)
+			function error(err){
+				cb&&cb(err)
+			}
+		})
+	})
+}
+
+function setStorage(s, cb){
+	cb = cb || function(){}
+	TYPE = window.PERSISTENT
+	SIZE = s || 1024 * 1024 * 1024
+	getFileSystem(cb, true)
+}
+
+function getFileSystem(cb, reload){	
+	if(FILESYSTEM && !(reload)) cb(null, FILESYSTEM);
+	else{
+		if(window.requestFileSystem){
+			window.reqFileSystem(TYPE, SIZE, function(fs){
+				FILESYSTEM = fs;
+	      cb(null, FILESYSTEM)
+	    }, function(err){cb(err, null)})
+		}
+		else if(window.webkitRequestFileSystem){
+			navigator.webkitPersistentStorage.requestQuota(SIZE, function(grantedBytes) {
+				  window.webkitRequestFileSystem(TYPE, grantedBytes, function(fs){
+						FILESYSTEM = fs;
+			      cb(null, FILESYSTEM)
+				}, function(err) {
+				    cb(err, null)
+				});
+			})
+		}
+		else{
+			cb(new Error('no file system', null))
+		}		
+	}
+}
+
+function rethrow() {
+  return function(err) {
+    if (err) {
+      throw err;  // Forgot a callback but don't know where? Use NODE_DEBUG=fs
+    }
+  };
+}
+
+function maybeCallback(cb) {
+  return typeof cb === 'function' ? cb : rethrow();
+}
+
+
+}).call(this,require('_process'))
+},{"_process":10,"path":9,"through":133}]},{},[59]);

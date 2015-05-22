@@ -1,11 +1,14 @@
 var on = require('dom-event')
 var fs = require('fs')
+var nb = require('../nbfs') // note-bene
+nb.setStorage(5 * 1024 * 1024 * 1024)
 var uis = require('getids')
 var on = require('dom-event')
 var touchdown = require('touchdown')
 var drop = require('drag-drop/buffer')
 var ready = require('doc-ready')
 var hover = require('../mousearound')
+var resample = require('./resample.js')
 
 var sampler = require('./')
 var context = new AudioContext
@@ -70,6 +73,10 @@ function createSample(buff){
   })
   on(ui.$slice, 'touchdown', function(e){
     var cut = sample.slice()
+    var params = sample.getParams()
+    console.log(params)
+    cut = resample(context.sampleRate, cut, params)
+    console.log(cut)
     var _sample = createSample(cut)
     samples.push(cut)
   })

@@ -1,7 +1,7 @@
 var emitter = require('events').EventEmitter
 var inherits = require('inherits')
 inherits(sampler, emitter)
-
+var resample = require('./resample.js')
 var fileBuff = require('jsynth-file-sample')
 var streamBuff = require('../jsynth-stream-buf')
 var pitcher = require('../jsynth-pitch-shift')
@@ -66,7 +66,7 @@ function sampler (master, buff, parel, cb){
     }
   }
   self.speed = function(x){
-    self.source.playbackRate = x
+    self.playbackRate = self.source.playbackRate = x
   }
   self.reverse = function(){
     self.reversed = !self.reversed
@@ -98,6 +98,14 @@ function sampler (master, buff, parel, cb){
       fireSample(self.mono, self.pauseStart)
     }
   }
+  self.getParams = function(){
+    var p = {}
+    p.sampleRate = sr
+    p.speed = self.source.playbackRate
+    p.amplitude = self.source.gain
+    p.pitch = self.pitch
+    return p
+  }
   self.slice = function(i,o){
     i = i || self.source._loopStart || 0 
     o = o || self.source._loopEnd || self.source.buffer.length - 1
@@ -117,18 +125,19 @@ function sampler (master, buff, parel, cb){
   }
   fileBuff(master, buff, function(e, source){
     cb()
+    self.source = source  
     var tracks = []
     for(var x = 0; x < source.buffer.numberOfChannels; x++){
       tracks.push(source.buffer.getChannelData(x))
     }
     var mono = mergeTracks(tracks)
     self.mono = mono
+    source.playbackRate = 1
     touchdown.start(self.parent)
     on(self.parent, 'touchdown', curseHandle) // handler down below... 
     on(document,'keydown', function(evt){
       keydown(evt)
     })
-    self.source = source  
     self.source.loopStart = 0
     self.source.loopEnd = source.buffer.duration
     //on(parent, 'deltavector', curseHandle) 
@@ -183,7 +192,10 @@ function sampler (master, buff, parel, cb){
       s.loop = self.looping
       s.loopStart = self.loop ? self.source.loopStart : pos 
       s.loopEnd = self.source.loopEnd || self.source.buffer.duration
+      s.playbackRate= self.playbackRate
+      self.amplitude(self.source.gain) 
       s.onended = function(){
+
           console.log('ended')
         if(!(self.loop)) self.playing = false
         else {
@@ -194,13 +206,16 @@ function sampler (master, buff, parel, cb){
       self.startTime = master.currentTime
       self.timeOffset = -self.startTime + pos
       self.currentTime = self.startTime + pos
-      self.source = s
+      self.source = s;
       if(self.reversed) {
         self.reversed = false
         self.reverse()
       }
       s.connect(master.destination)
       s.start(0, pos, Math.pow(2, 16))
+      if(!(self.pitch === 1)){
+        self.setPitch(self.pitch)
+      }
       moveNeedle(self.inPos)
     })
 
