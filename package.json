@@ -16,7 +16,9 @@
   "license": "ISC",
   "dependencies": {
     "abre": "^0.5.0",
+    "archiver": "^0.14.4",
     "brfs": "^1.4.0",
+    "concat-stream": "^1.4.8",
     "doc-ready": "^1.0.3",
     "dom-event": "0.0.5",
     "drag-drop": "^2.1.0",

@@ -147,7 +147,7 @@ function sampler (master, buff, parel, cb){
     //source.start(0) 
     //source.connect(master.destination)
     self.duration = tracks[0].length / master.sampleRate
-
+    fireSample(mono, 0, false)
 //    freqency analysis experimentation.
 //    probably gonna find itself in its own module
 //    getFreqn()
@@ -178,7 +178,7 @@ function sampler (master, buff, parel, cb){
 */
   })
 
-  function fireSample(buf, pos){
+  function fireSample(buf, pos, fire){
     pos = pos || 0
     self.inPos = pos
     streamBuff(master, buf, function(e, s){
@@ -211,8 +211,10 @@ function sampler (master, buff, parel, cb){
         self.reversed = false
         self.reverse()
       }
-      s.connect(master.destination)
-      s.start(0, pos, Math.pow(2, 16))
+      if(!(fire === false)) {
+        s.connect(master.destination)
+        s.start(0, pos, Math.pow(2, 16))
+      }
       if(!(self.pitch === 1)){
         self.setPitch(self.pitch)
       }
