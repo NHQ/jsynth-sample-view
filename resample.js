@@ -27,7 +27,7 @@ module.exports = function(sr, buf, params){
       hopSize: hop,
       sampleRate: sr,
       freqThreshold: .9,
-      harmonicScale: .2
+      harmonicScale: 1/2
     }) 
   
     for(var x = 0; x < e; x++){

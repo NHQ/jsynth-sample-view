@@ -1,6 +1,7 @@
 var emitter = require('events').EventEmitter
 var inherits = require('inherits')
 inherits(sampler, emitter)
+var cis = Ciseaux///require('../ciseaux')
 var resample = require('./resample.js')
 var fileBuff = require('jsynth-file-sample')
 var streamBuff = require('../jsynth-stream-buf')
@@ -26,6 +27,25 @@ function sampler (master, buff, parel, cb){
   if(!(this instanceof sampler)) return new sampler(master, buff, parel, cb)
 
   emitter.call(this)
+/*
+   cis.from(buff).then(function(tape){
+      tape.render(master).then(function(node){console.log(node)})
+      console.log(tape) 
+    })
+
+  master.decodeAudioData(buff, function(data){
+    cis.from(data).then(function(tape){
+      console.log(tape)
+      tape.render(master).then(function(node){
+        console.log(node.numberOfChannels)
+        var source = master.createBufferSource()
+        source.buffer = node
+//        source.connect(master.destination)
+//        source.start(0)
+      })
+    })
+  })
+*/
 
   var self = this
   const sr = master.sampleRate 
@@ -105,6 +125,22 @@ function sampler (master, buff, parel, cb){
     p.amplitude = self.source.gain
     p.pitch = self.pitch
     return p
+  }
+  self.split = function(d, offset){
+    var buf = self.source.getBuffer().buffer
+    var l = Math.ceil(buf.byteLength / 4 / d) 
+    var cuts = []
+    var o = offset || 0
+    for(var x = 0; x < buf.length; x+=d){
+      var s = buf.slice(x * l + o, x * l + 0 + l)
+      var b = new Float32Array(l)
+      b.set(s)
+      if(o > 0 && x === d - 1){
+        b.set(o, buf.slice(0, l - o))
+      }
+      cuts.push(b)
+    }
+    return cuts
   }
   self.slice = function(i,o){
     i = i || self.source._loopStart || 0 
@@ -194,11 +230,8 @@ function sampler (master, buff, parel, cb){
       s.loopEnd = self.source.loopEnd || self.source.buffer.duration
       s.playbackRate= self.playbackRate
       s.onended = function(){
-        console.log('ended')
-        if(!(self.loop)) self.playing = false
-        else {
-          fireSample(buf, pos)
-        }
+        s.disconnect()
+        self.playing = false
       }
       self.epochStart = Date.now()
       self.startTime = master.currentTime
@@ -213,7 +246,7 @@ function sampler (master, buff, parel, cb){
       }
       if(!(fire === false)) {
         s.connect(master.destination)
-        s.start(0, pos, Math.pow(2, 16))
+        s.start(0, pos)
       }
       if(!(self.pitch === 1)){
         self.setPitch(self.pitch)
