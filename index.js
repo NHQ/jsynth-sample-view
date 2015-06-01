@@ -1,7 +1,7 @@
 var emitter = require('events').EventEmitter
 var inherits = require('inherits')
 inherits(sampler, emitter)
-var cis = Ciseaux///require('../ciseaux')
+//var cis = Ciseaux///require('../ciseaux')
 var resample = require('./resample.js')
 var fileBuff = require('jsynth-file-sample')
 var streamBuff = require('../jsynth-stream-buf')
@@ -78,8 +78,10 @@ function sampler (master, buff, parel, cb){
     self.source.gain = x
   }
   self.setPitch = function(x){
+    if(isNaN(x)) x = 1
     self.pitch = x
-    if(!self.pitched){
+    if(!self.pitched && !(self.pitch === 1)){
+      self.pitched = true
       self.source.disconnect(master.destination)
       self.source.connect(pitchNode)
       pitchNode.connect(master.destination)
@@ -152,13 +154,37 @@ function sampler (master, buff, parel, cb){
     self.source.loopStart = self.source.currentTime//epochlapsed + self.inPos//source.loopStart
     self.inPos = self.source.loopStart
     self.loopDuration = self.source.loopEnd - self.source.loopStart//epochlapsed//source.buffer.duration - source.loopStart
+    if(!(self.playing))self.paint.setNeedles()    
   }
   self.setOut = function(){ 
     self.paint.needles[2] = self.paint.needles[0]
     self.source.loopEnd = self.source.currentTime//epochlapsed + self.inPos//source.loopStart
     self.outPos = self.source.loopStart
     self.loopDuration = self.source.loopEnd - self.source.loopStart//epochlapsed//source.buffer.duration - source.loopStart
+    if(!(self.playing))self.paint.setNeedles()    
   }
+  var tracks = buff
+  var mono = mergeTracks(tracks)
+  self.mono = mono
+  self.duration = tracks[0].length / master.sampleRate
+  streamBuff(master, mono, function(err, src){
+    self.source = src
+    src.playbackRate = 1
+    src.loopStart = 0
+    src.loopEnd = src.buffer.duration
+    // needs to be moved from here
+    touchdown.start(self.parent)
+    on(self.parent, 'touchdown', curseHandle) // handler down below... 
+    on(document,'keydown', function(evt){
+      keydown(evt)
+    })
+    self.paint = draw(self.parent, master)    
+    self.paint.setBuffer(mono)
+    // to here
+
+    cb(null, src)
+  })
+/*
   fileBuff(master, buff, function(e, source){
     cb()
     self.source = source  
@@ -176,44 +202,12 @@ function sampler (master, buff, parel, cb){
     })
     self.source.loopStart = 0
     self.source.loopEnd = source.buffer.duration
-    //on(parent, 'deltavector', curseHandle) 
-    
     self.paint = draw(self.parent, master)    
     self.paint.setBuffer(mono)
-    //source.start(0) 
-    //source.connect(master.destination)
     self.duration = tracks[0].length / master.sampleRate
     fireSample(mono, 0, false)
-//    freqency analysis experimentation.
-//    probably gonna find itself in its own module
-//    getFreqn()
-/*
-  fbuff = jbuffers(6)
-    var size = 256 * 2 * 2 * 2 
-    var secPerBin = 1 / (sr / size)
-    var range = (sr / 2) / size
-    var getRange = function(index){
-      return [index * range, index * range + range]
-    }
-    ffts = []
-    var x = 0, subuff
-    worker.addEventListener('message', function(ev){
-      ffts.push(ev.data)  
-      if(x<mono.length) getFreqn()
-    })
-    function getFreqn(){
-      if(x < mono.length) {
-        var end = Math.min(x + size, mono.length)
-        subuff = mono.subarray(x, end)
-        worker.postMessage(subuff, window.location.origin)
-        x+=size
-      }
-      else console.log(ffts)
-    }
-
-*/
   })
-
+*/
   function fireSample(buf, pos, fire){
     pos = pos || 0
     self.inPos = pos
@@ -232,6 +226,8 @@ function sampler (master, buff, parel, cb){
       s.onended = function(){
         s.disconnect()
         self.playing = false
+        self.paused = true
+        self.pauseStart = pos
       }
       self.epochStart = Date.now()
       self.startTime = master.currentTime
@@ -322,12 +318,20 @@ function sampler (master, buff, parel, cb){
 
   function curseHandle  (evt){
     self.source.disconnect()
-    if(self.playing) self.source.stop(0)
-    var x = 0
-    fireSample(self.mono, x=  evt.detail.offsetX / self.parent.children[0].width * self.duration)
-    self.paint.needles[0] = evt.detail.offsetX
-    self.paint.setNeedles()    
-    self.paint.emit('something') // i'll be back
+     var x =  evt.detail.offsetX / self.parent.children[0].width * self.duration
+    if(self.playing) {
+      self.source.stop(0)
+      fireSample(self.mono, x)
+      self.paint.needles[0] = evt.detail.offsetX
+      self.paint.setNeedles()    
+    }
+    else{
+      self.inPos = x
+      self.pauseStart = x
+      self.source.currentTime = x
+      self.paint.needles[0] = evt.detail.offsetX
+      self.paint.setNeedles()    
+    }
   }
 
   function trash(_track, div, ac, offset){

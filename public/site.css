@@ -1,9 +1,9 @@
 .sample-container{
   width:100%;
   position:relative;
-  height: 242px;
+  height: 150px;
   box-sizing: border-box;
-  z-index:-1;
+  margin: 21px 0;
 }
 .selected{
   background-color: rgba(33, 167, 88, 1)
@@ -14,10 +14,12 @@
   margin: 0;
   padding: 0;
   position:absolute;
-  top: 21px;
+  top: 0px;
   left: 21px;
 }
-
+.sample canvas{
+  z-index:3;
+}
 .ctrlbox{
   width: 30%;
   height: 50%;
@@ -25,10 +27,10 @@
   position:fixed;
   top:21px;
   right: 11px;
-  z-index:1;
   display:flex;
   flex-direction: row;
   flex-wrap:wrap;
+  z-index:1;
 }
 .ctrlbox button, .ctrlbox input[type=text]{
   height: 20%;
@@ -45,6 +47,13 @@
   padding-right:11px;
   display:inline-block;
   flex:2 2 60%;
+}
+.ctrlbox input[type=text]:last-of-type{
+  margin: 3% 0;
+}
+.ctrlbox input[type=text]:first-of-type{
+  margin:0;
+  border:9px solid #ccc;
 }
 .ctrlbox input[type=text]{
   border: 11px solid #ccc;
@@ -82,16 +91,22 @@ input[type=range]::-webkit-slider-thumb{
   border: 0px solid black;
   -webkit-appearance:none;
 }
+input[id=bpm]::-webkit-slider-thumb::before{
+  content: "bpm";
+  font-size:22px;
+  color:#111;
+  background:#ccc;
+  padding: 5px 11px 5px;
+}
 input[id=speed]::-webkit-slider-thumb::before{
   content: "speed";
   font-size:22px;
   color:#111;
   background:#ccc;
   padding: 5px 11px 5px;
-  -webkit-appearance:none;
 }
 input[id=amplitude]::-webkit-slider-thumb::before{
-  content: "amplitude";
+  content: "gain";
   color:#111;
   font-size:22px;
   background:#ccc;

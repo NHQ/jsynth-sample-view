@@ -26,19 +26,42 @@ body.appendChild(ctrls)
   var ui = uis(ctrls)
   var loop = 0 
   for(var el in ui) touchdown.start(ui[el])
-  on(ui.$download, 'touchdown', function(e){
+  on(ui.export, 'touchdown', function(e){
     var buf = sample.slice()
     buf.name = sample.name
-    dlblob(buf, true)
+    dlblob(buf, master.sampleRate, true, function(e, a){
+      console.log(e, a)
+    })
+  })
+  on(ui.speedRange, 'input', function(e){
+    ui.speed.value = parseFloat(e.target.value)
+    sample.speed(parseFloat(e.target.value))
+  })
+  on(ui.pitchRange, 'input', function(e){
+    ui.pitch.value = parseFloat(e.target.value)
+    sample.setPitch(parseFloat(e.target.value))
+  })
+  on(ui.bpmRange, 'input', function(e){
+    ui.bpm.value = parseFloat(e.target.value)
+  })
+  on(ui.ampRange, 'input', function(e){
+    ui.amplitude.value = parseFloat(e.target.value)
+    sample.amplitude(parseFloat(e.target.value))
+  })
+  on(ui.bpm, 'input', function(e){
+    ui.bpmRange.value = ui.bpmRange.textContent = e.target.valueAsNumber
   })
   on(ui.amplitude, 'input', function(e){
     sample.amplitude(e.target.valueAsNumber)
+    ui.ampRange.value = ui.ampRange.textContent = e.target.valueAsNumber
   })
   on(ui.pitch, 'input', function(e){
     sample.setPitch(e.target.valueAsNumber)
+    ui.pitchRange.value = ui.pitchRange.textContent = e.target.valueAsNumber
   })
   on(ui.speed, 'input', function(e){
     sample.speed(e.target.valueAsNumber)
+    ui.speedRange.value = ui.speedRange.textContent = e.target.valueAsNumber
   })
   on(ui.$reverse, 'touchdown', function(e){
     sample.reverse()
@@ -66,20 +89,23 @@ body.appendChild(ctrls)
     console.log(params)
     cut = resample(master.sampleRate, cut, params)
     console.log(cut)
-    var _sample = createSample(cut)
-    samples.push(_sample)
+    createSample(cut, function(_sample){
+       
+      samples.push(_sample)
+    })
   })
 
 ready(function(){
   drop(body, function(files){
     var buff = files[0].buffer
-    var _sample = createSample(buff)
-    var n = files[0].name
-    n = n.slice(0, n.lastIndexOf('.'))
-    _sample.name = n
-    sample = _sample
-    _sample.index = samples.length
-    samples.push(_sample)
+    var _sample = createSample(buff, function(_sample){
+      var n = files[0].name
+      n = n.slice(0, n.lastIndexOf('.'))
+      _sample.name = n
+      sample = _sample
+      _sample.index = samples.length
+      samples.push(_sample)
+    })
   })
 
   on(document,'keydown', function(evt){
@@ -89,7 +115,8 @@ ready(function(){
 
 function keydown(evt){
   var char = charcode(evt)
-  console.log('char es %s', char)
+  if(evt.srcElement.tagName === 'INPUT') return
+  console.log(evt)
   var timeIn = evt.timeStamp 
   switch (char){
     case 'i':
@@ -110,7 +137,6 @@ function keydown(evt){
     break;
     case char.match(/[0-9]/) && char.match(/[0-9]/)[0]:
       sample = samples[parseInt(char)-1]
-      console.log(sample.parel)
     break;
   }
   if(char === 'i'){
@@ -118,7 +144,7 @@ function keydown(evt){
   if(char === 'o'){
   }
 }
-function createSample(buff){
+function createSample(buff, cb){
   var div = document.createElement('div')
   div.classList.add('sample-container')
   div.setAttribute('tabIndex', samples.length + 1)
@@ -127,5 +153,16 @@ function createSample(buff){
     console.log(this.tabIndex)
     sample = samples[this.tabIndex-1]
   })
-  return new sampler(master, buff, div, function(err, source){})
+  master.decodeAudioData(buff, function(buffer){
+    var tracks = []
+    for(var x = 0; x < buffer.numberOfChannels; x++){
+      tracks.push(buffer.getChannelData(x))
+    }
+
+    var s = new sampler(master, tracks, div, function(err, src){})
+
+    cb(s)
+
+  })
+  return div 
 }
