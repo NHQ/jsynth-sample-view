@@ -18,6 +18,9 @@ var ui = require('getids')(document.body)
 //var worker = work(require('./fft.js'), 'jsynth', ['width=0,height=0,menubar=no,scrollbars=no'])
 
 
+var chop = require('./chop')
+var loop = require('./loop')
+
 document.body.removeChild(ui.sampletmp)
 
 module.exports = sampler 
@@ -70,6 +73,10 @@ function sampler (master, buff, parel, cb){
   self.pitched = false
   self.playbackRate = 1
   self.epochStart = Date.now()
+  self.chop = function(n, cb){
+    var chops = chop(self.mono, n)
+    cb(null, chops)
+  }
   self.getTime = function(){
     return master.currentTime - self.startTime + self.inPos
   }

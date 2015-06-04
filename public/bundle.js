@@ -12219,7 +12219,21 @@ module.exports = function(buf, sampleRate, click, cb){
 
 }
 
-},{"wav-encoder":120}],59:[function(require,module,exports){
+},{"wav-encoder":122}],59:[function(require,module,exports){
+module.exports = function(buff, chops){
+  var ab = buff.buffer
+  var buffs = []
+  var l = Math.floor(buff.length / chops)
+  for(var x = 0; x < chops; x++){
+    var nbuff = new Float32Array(l)
+    var y = x * 4 * l
+    nbuff.set(new Float32Array(ab.slice(y, y + l * 4)))
+    buffs.push(nbuff)
+  }
+  return buffs
+}
+
+},{}],60:[function(require,module,exports){
 var waveformer = require('jsynth-waveform');
 var installCanvas = require('./install-canvas')
 var emitter = require('events').EventEmitter
@@ -12291,7 +12305,7 @@ function draw(parent, master){
   }
 }
 
-},{"./install-canvas":62,"events":6,"inherits":79,"jsynth-waveform":84}],60:[function(require,module,exports){
+},{"./install-canvas":63,"events":6,"inherits":81,"jsynth-waveform":86}],61:[function(require,module,exports){
 var path = require('path')
 var on = require('dom-event')
 
@@ -12309,7 +12323,7 @@ var dlblob = require('./blob')
 var sampler = require('./')
 var master = new AudioContext
 var sample = undefined // selected sample
-var ctrls = "<div id=ctrls class=ctrlbox>\n  <button id=$play class=play>&gt</button>\n  <button id=$pause class=pause>||</button>\n  <button id=$playloop class=playloop>|&#8212&gt</button>\n  <button id=$loop class=loop><span style=\"font-size:100%;line-height:0\">&#9775</span></button>\n  <button id=$setIn class=setin>&#254&#8212</button>\n  <button id=$setOut class=\"setout reverse\"><span sytyle=\"font-size:300%\">&#254</span>&#8212</button>\n  <button id=$slice class=slice>8&lt--</button>\n  <button id=$reverse class=reverse>R</button>\n  <button id=$download class=download>chop(BPM)</button>\n  <button id=$download class=download>chop(x)&#8212&gt</button>\n  <input type=text id=pitchRange value=1>\n  <br />\n  <input type=range min=1 max=220 value=60 step=.1 id=bpm></input>\n  <input type=text id=bpmRange value=60>\n  <input type=range min=0 max=10 value=1 step=.1 id=amplitude></input>\n  <input type=text id=ampRange value=1>\n  <input type=range min=0 max=2 value=1 step=.01 id=speed></input>\n  <input type=text id=speedRange value=1>\n  <input type=range min=0 max=2 value=1 step=.01 id=pitch></input>\n  <input type=text id=pitchRange value=1>\n  <br />\n  <button id=save class=save>SAVE</button>\n  <button id=export class=export>EXPORT</button>\n  <button id=reset class=reset>RESET</button>\n  <button id=delete class=delete>DEL</button>\n</div>\n"
+var ctrls = "<div id=ctrls class=ctrlbox>\n  <button id=$play class=play>&gt</button>\n  <button id=$pause class=pause>||</button>\n  <button id=$playloop class=playloop>|&#8212&gt</button>\n  <button id=$loop class=loop><span style=\"font-size:100%;line-height:0\">&#9775</span></button>\n  <button id=$setIn class=setin>&#254&#8212</button>\n  <button id=$setOut class=\"setout reverse\"><span sytyle=\"font-size:300%\">&#254</span>&#8212</button>\n  <button id=$slice class=slice>8&lt--</button>\n  <button id=$reverse class=reverse>R</button>\n  <button id=$bpmchop class=bpmchop>chop(BPM)</button>\n  <button id=$xchop class=xchop>chop(x)&#8212&gt</button>\n  <input type=text id=pitchRange value=1>\n  <br />\n  <input type=range min=1 max=220 value=60 step=.1 id=bpm></input>\n  <input type=text id=bpmRange value=60>\n  <input type=range min=0 max=10 value=1 step=.1 id=amplitude></input>\n  <input type=text id=ampRange value=1>\n  <input type=range min=0 max=2 value=1 step=.01 id=speed></input>\n  <input type=text id=speedRange value=1>\n  <input type=range min=0 max=2 value=1 step=.01 id=pitch></input>\n  <input type=text id=pitchRange value=1>\n  <br />\n  <button id=save class=save>SAVE</button>\n  <button id=export class=export>EXPORT</button>\n  <button id=reset class=reset>RESET</button>\n  <button id=delete class=delete>DEL</button>\n</div>\n"
 var div = document.createElement('div')
 div.innerHTML = ctrls
 ctrls = div.firstChild
@@ -12377,13 +12391,24 @@ body.appendChild(ctrls)
     sample.pause()
 //    sample.emit('pause')
   })
+  on(ui.$bpmchop, 'touchdown', function(e){
+    var n = ui.bpmRange.value
+    sample.chop(n, function(e, chops){
+      chops.forEach(function(e){
+        createSample([e], function(_sample){
+          console.log(_sample)
+          _sample.index = samples.length
+          samples.push(_sample)
+        })
+    })})
+  })
   on(ui.$slice, 'touchdown', function(e){
     var cut = sample.slice()
     var params = sample.getParams()
     console.log(params)
     cut = resample(master.sampleRate, cut, params)
     console.log(cut)
-    createSample(cut, function(_sample){
+    createSample([cut], function(_sample){
        
       samples.push(_sample)
     })
@@ -12410,7 +12435,7 @@ ready(function(){
 function keydown(evt){
   var char = charcode(evt)
   if(evt.srcElement.tagName === 'INPUT') return
-  console.log(evt)
+  console.log(char)
   var timeIn = evt.timeStamp 
   switch (char){
     case 'i':
@@ -12426,6 +12451,10 @@ function keydown(evt){
     case '[':
     break;
     case ']':
+    break;
+    case 'space':
+      evt.preventDefault()
+      sample.play()
     break;
     case 'delete':
     break;
@@ -12446,22 +12475,37 @@ function createSample(buff, cb){
   on(div, 'focus', function(){
     console.log(this.tabIndex)
     sample = samples[this.tabIndex-1]
+    console.log(sample)
   })
-  master.decodeAudioData(buff, function(buffer){
-    var tracks = []
-    for(var x = 0; x < buffer.numberOfChannels; x++){
-      tracks.push(buffer.getChannelData(x))
-    }
+  if(Array.isArray(buff)){
+    
+    // buf is an array of channel datas in float32 type arrays
+    // node need to decode
+
+    var tracks = buff
 
     var s = new sampler(master, tracks, div, function(err, src){})
 
     cb(s)
 
-  })
+  }
+  else{
+    master.decodeAudioData(buff, function(buffer){
+      var tracks = []
+      for(var x = 0; x < buffer.numberOfChannels; x++){
+        tracks.push(buffer.getChannelData(x))
+      }
+
+      var s = new sampler(master, tracks, div, function(err, src){})
+
+      cb(s)
+
+    })
+  }
   return div 
 }
 
-},{"../mousearound":139,"../nbfs":142,"./":61,"./blob":58,"doc-ready":63,"dom-event":65,"drag-drop/buffer":66,"getids":78,"jsynth-resampler":82,"keycode":85,"path":9,"touchdown":116}],61:[function(require,module,exports){
+},{"../mousearound":141,"../nbfs":144,"./":62,"./blob":58,"doc-ready":65,"dom-event":67,"drag-drop/buffer":68,"getids":80,"jsynth-resampler":84,"keycode":87,"path":9,"touchdown":118}],62:[function(require,module,exports){
 var emitter = require('events').EventEmitter
 var inherits = require('inherits')
 inherits(sampler, emitter)
@@ -12481,6 +12525,9 @@ var ui = require('getids')(document.body)
 //window.name = 'master'
 //var worker = work(require('./fft.js'), 'jsynth', ['width=0,height=0,menubar=no,scrollbars=no'])
 
+
+var chop = require('./chop')
+var loop = require('./loop')
 
 document.body.removeChild(ui.sampletmp)
 
@@ -12534,6 +12581,10 @@ function sampler (master, buff, parel, cb){
   self.pitched = false
   self.playbackRate = 1
   self.epochStart = Date.now()
+  self.chop = function(n, cb){
+    var chops = chop(self.mono, n)
+    cb(null, chops)
+  }
   self.getTime = function(){
     return master.currentTime - self.startTime + self.inPos
   }
@@ -12831,7 +12882,7 @@ function sampler (master, buff, parel, cb){
 
 
 
-},{"../jsynth-pitch-shift":26,"../jsynth-stream-buf":125,"./draw":59,"./resample.js":123,"dom-event":65,"events":6,"getids":78,"inherits":79,"jbuffers":80,"jsynth-file-sample":81,"keycode":85,"touchdown":116}],62:[function(require,module,exports){
+},{"../jsynth-pitch-shift":26,"../jsynth-stream-buf":127,"./chop":59,"./draw":60,"./loop":64,"./resample.js":125,"dom-event":67,"events":6,"getids":80,"inherits":81,"jbuffers":82,"jsynth-file-sample":83,"keycode":87,"touchdown":118}],63:[function(require,module,exports){
 module.exports = function(parent){
   if(!parent) parent = document.body
   var index = []
@@ -12864,7 +12915,19 @@ function getCSS(el, prop){
 }
 
 
-},{}],63:[function(require,module,exports){
+},{}],64:[function(require,module,exports){
+module.exports = function(buff, loops){
+  var ab = buff.buffer
+  var nbuff = new Float32Array(Math.floor(buff.length * loops))
+  var y = 1
+  for(var x = 0; x < loops; x++){
+    nbuff.set(new Float32Array(ab.slice(0, ab.byteLength * Math.min(1, ((x + 1) % loops)))), buff.length * x)
+  }
+
+  return nbuff
+}
+
+},{}],65:[function(require,module,exports){
 /*!
  * docReady v1.0.3
  * Cross browser DOMContentLoaded event emitter
@@ -12938,7 +13001,7 @@ if ( typeof define === 'function' && define.amd ) {
 
 })( window );
 
-},{"eventie":64}],64:[function(require,module,exports){
+},{"eventie":66}],66:[function(require,module,exports){
 /*!
  * eventie v1.0.6
  * event binding helper
@@ -13022,7 +13085,7 @@ if ( typeof define === 'function' && define.amd ) {
 
 })( window );
 
-},{}],65:[function(require,module,exports){
+},{}],67:[function(require,module,exports){
 module.exports = on;
 module.exports.on = on;
 module.exports.off = off;
@@ -13039,7 +13102,7 @@ function off (element, event, callback, capture) {
   return callback;
 }
 
-},{}],66:[function(require,module,exports){
+},{}],68:[function(require,module,exports){
 module.exports = DragDropAsBuffer
 
 var dragDrop = require('./')
@@ -13067,7 +13130,7 @@ function DragDropAsBuffer (elem, cb) {
   })
 }
 
-},{"./":67,"blob-to-buffer":68,"run-parallel":74}],67:[function(require,module,exports){
+},{"./":69,"blob-to-buffer":70,"run-parallel":76}],69:[function(require,module,exports){
 module.exports = dragDrop
 
 var throttle = require('lodash.throttle')
@@ -13125,7 +13188,7 @@ function makeOnDrop (elem, cb) {
   }
 }
 
-},{"lodash.throttle":71}],68:[function(require,module,exports){
+},{"lodash.throttle":73}],70:[function(require,module,exports){
 var toBuffer = require('typedarray-to-buffer')
 
 module.exports = function blobToBuffer (blob, cb) {
@@ -13144,7 +13207,7 @@ module.exports = function blobToBuffer (blob, cb) {
   reader.readAsArrayBuffer(blob)
 }
 
-},{"typedarray-to-buffer":69}],69:[function(require,module,exports){
+},{"typedarray-to-buffer":71}],71:[function(require,module,exports){
 (function (Buffer){
 /**
  * Convert a typed array to a Buffer without a copy
@@ -13179,7 +13242,7 @@ module.exports = function (arr) {
 }
 
 }).call(this,require("buffer").Buffer)
-},{"buffer":2,"is-typedarray":70}],70:[function(require,module,exports){
+},{"buffer":2,"is-typedarray":72}],72:[function(require,module,exports){
 module.exports      = isTypedArray
 isTypedArray.strict = isStrictTypedArray
 isTypedArray.loose  = isLooseTypedArray
@@ -13220,7 +13283,7 @@ function isLooseTypedArray(arr) {
   return names[toString.call(arr)]
 }
 
-},{}],71:[function(require,module,exports){
+},{}],73:[function(require,module,exports){
 /**
  * lodash 3.0.2 (Custom Build) <https://lodash.com/>
  * Build: `lodash modern modularize exports="npm" -o ./`
@@ -13328,7 +13391,7 @@ function isObject(value) {
 
 module.exports = throttle;
 
-},{"lodash.debounce":72}],72:[function(require,module,exports){
+},{"lodash.debounce":74}],74:[function(require,module,exports){
 /**
  * lodash 3.0.3 (Custom Build) <https://lodash.com/>
  * Build: `lodash modern modularize exports="npm" -o ./`
@@ -13569,7 +13632,7 @@ function isObject(value) {
 
 module.exports = debounce;
 
-},{"lodash.isnative":73}],73:[function(require,module,exports){
+},{"lodash.isnative":75}],75:[function(require,module,exports){
 /**
  * lodash 3.0.2 (Custom Build) <https://lodash.com/>
  * Build: `lodash modern modularize exports="npm" -o ./`
@@ -13686,7 +13749,7 @@ function escapeRegExp(string) {
 
 module.exports = isNative;
 
-},{}],74:[function(require,module,exports){
+},{}],76:[function(require,module,exports){
 var dezalgo = require('dezalgo')
 
 module.exports = function (tasks, cb) {
@@ -13726,7 +13789,7 @@ module.exports = function (tasks, cb) {
   }
 }
 
-},{"dezalgo":75}],75:[function(require,module,exports){
+},{"dezalgo":77}],77:[function(require,module,exports){
 var wrappy = require('wrappy')
 module.exports = wrappy(dezalgo)
 
@@ -13750,7 +13813,7 @@ function dezalgo (cb) {
   }
 }
 
-},{"asap":76,"wrappy":77}],76:[function(require,module,exports){
+},{"asap":78,"wrappy":79}],78:[function(require,module,exports){
 (function (process){
 
 // Use the fastest possible means to execute a task in a future turn
@@ -13867,7 +13930,7 @@ module.exports = asap;
 
 
 }).call(this,require('_process'))
-},{"_process":10}],77:[function(require,module,exports){
+},{"_process":10}],79:[function(require,module,exports){
 // Returns a wrapper function that returns a wrapped callback
 // The wrapper function should do some stuff, and return a
 // presumably different callback function.
@@ -13902,7 +13965,7 @@ function wrappy (fn, cb) {
   }
 }
 
-},{}],78:[function(require,module,exports){
+},{}],80:[function(require,module,exports){
 module.exports = function(el){
 
     var ids = {};
@@ -13927,9 +13990,9 @@ module.exports = function(el){
 
 }
 
-},{}],79:[function(require,module,exports){
+},{}],81:[function(require,module,exports){
 arguments[4][7][0].apply(exports,arguments)
-},{"dup":7}],80:[function(require,module,exports){
+},{"dup":7}],82:[function(require,module,exports){
 var Buffer = Buffer;
 
 var types = [
@@ -14216,7 +14279,7 @@ Buffers.prototype.toString = function(encoding, start, end) {
     return this.slice(start, end).toString(encoding);
 }
 
-},{}],81:[function(require,module,exports){
+},{}],83:[function(require,module,exports){
 // handles audio files and raw, mono, audio buffers
 
 module.exports = function(context, buff, cb){
@@ -14265,7 +14328,7 @@ module.exports = function(context, buff, cb){
   }
 }
 
-},{}],82:[function(require,module,exports){
+},{}],84:[function(require,module,exports){
 var Resample = require('./resampler.js')
 var shift = require('pitch-shift')
 var jbuffers = require('jbuffers')
@@ -14365,7 +14428,7 @@ function mergeTracks(tracks, a){
   return track
 }
 
-},{"./resampler.js":83,"jbuffers":80,"pitch-shift":113}],83:[function(require,module,exports){
+},{"./resampler.js":85,"jbuffers":82,"pitch-shift":115}],85:[function(require,module,exports){
 //JavaScript Audio Resampler (c) 2011 - Grant Galitz
 module.exports = Resampler
 
@@ -14578,7 +14641,7 @@ Resampler.prototype.initializeBuffers = function () {
 	}
 }
 
-},{}],84:[function(require,module,exports){
+},{}],86:[function(require,module,exports){
 module.exports = function(opts){
 
   var ctx = opts.canvas.getContext('2d');
@@ -14694,7 +14757,7 @@ function avg(opts){
     return results 
 }
 
-},{}],85:[function(require,module,exports){
+},{}],87:[function(require,module,exports){
 // Source: http://jsfiddle.net/vWx8V/
 // http://stackoverflow.com/questions/5603195/full-list-of-javascript-keycodes
 
@@ -14843,63 +14906,63 @@ for (var alias in aliases) {
   codes[alias] = aliases[alias]
 }
 
-},{}],86:[function(require,module,exports){
+},{}],88:[function(require,module,exports){
 arguments[4][27][0].apply(exports,arguments)
-},{"dup":27}],87:[function(require,module,exports){
+},{"dup":27}],89:[function(require,module,exports){
 arguments[4][28][0].apply(exports,arguments)
-},{"./lib/fft-matrix.js":88,"cwise":89,"dup":28,"ndarray":104,"ndarray-ops":97,"typedarray-pool":96}],88:[function(require,module,exports){
+},{"./lib/fft-matrix.js":90,"cwise":91,"dup":28,"ndarray":106,"ndarray-ops":99,"typedarray-pool":98}],90:[function(require,module,exports){
 arguments[4][29][0].apply(exports,arguments)
-},{"bit-twiddle":86,"dup":29}],89:[function(require,module,exports){
+},{"bit-twiddle":88,"dup":29}],91:[function(require,module,exports){
 arguments[4][30][0].apply(exports,arguments)
-},{"./lib/parser.js":91,"./lib/shim.js":92,"dup":30}],90:[function(require,module,exports){
+},{"./lib/parser.js":93,"./lib/shim.js":94,"dup":30}],92:[function(require,module,exports){
 arguments[4][31][0].apply(exports,arguments)
-},{"dup":31}],91:[function(require,module,exports){
+},{"dup":31}],93:[function(require,module,exports){
 arguments[4][32][0].apply(exports,arguments)
-},{"dup":32,"falafel":93}],92:[function(require,module,exports){
+},{"dup":32,"falafel":95}],94:[function(require,module,exports){
 arguments[4][33][0].apply(exports,arguments)
-},{"./generate.js":90,"dup":33}],93:[function(require,module,exports){
+},{"./generate.js":92,"dup":33}],95:[function(require,module,exports){
 arguments[4][34][0].apply(exports,arguments)
-},{"dup":34,"esprima":94}],94:[function(require,module,exports){
+},{"dup":34,"esprima":96}],96:[function(require,module,exports){
 arguments[4][35][0].apply(exports,arguments)
-},{"dup":35}],95:[function(require,module,exports){
+},{"dup":35}],97:[function(require,module,exports){
 arguments[4][36][0].apply(exports,arguments)
-},{"dup":36}],96:[function(require,module,exports){
+},{"dup":36}],98:[function(require,module,exports){
 arguments[4][37][0].apply(exports,arguments)
-},{"bit-twiddle":86,"dup":37}],97:[function(require,module,exports){
+},{"bit-twiddle":88,"dup":37}],99:[function(require,module,exports){
 arguments[4][38][0].apply(exports,arguments)
-},{"cwise":98,"dup":38,"ndarray":104}],98:[function(require,module,exports){
+},{"cwise":100,"dup":38,"ndarray":106}],100:[function(require,module,exports){
 arguments[4][30][0].apply(exports,arguments)
-},{"./lib/parser.js":100,"./lib/shim.js":101,"dup":30}],99:[function(require,module,exports){
+},{"./lib/parser.js":102,"./lib/shim.js":103,"dup":30}],101:[function(require,module,exports){
 arguments[4][31][0].apply(exports,arguments)
-},{"dup":31}],100:[function(require,module,exports){
+},{"dup":31}],102:[function(require,module,exports){
 arguments[4][32][0].apply(exports,arguments)
-},{"dup":32,"falafel":102}],101:[function(require,module,exports){
+},{"dup":32,"falafel":104}],103:[function(require,module,exports){
 arguments[4][33][0].apply(exports,arguments)
-},{"./generate.js":99,"dup":33}],102:[function(require,module,exports){
+},{"./generate.js":101,"dup":33}],104:[function(require,module,exports){
 arguments[4][34][0].apply(exports,arguments)
-},{"dup":34,"esprima":103}],103:[function(require,module,exports){
+},{"dup":34,"esprima":105}],105:[function(require,module,exports){
 arguments[4][35][0].apply(exports,arguments)
-},{"dup":35}],104:[function(require,module,exports){
+},{"dup":35}],106:[function(require,module,exports){
 arguments[4][45][0].apply(exports,arguments)
-},{"./lib/tools.js":105,"./lib/viewn.js":106,"dup":45}],105:[function(require,module,exports){
+},{"./lib/tools.js":107,"./lib/viewn.js":108,"dup":45}],107:[function(require,module,exports){
 arguments[4][46][0].apply(exports,arguments)
-},{"dup":46}],106:[function(require,module,exports){
+},{"dup":46}],108:[function(require,module,exports){
 arguments[4][47][0].apply(exports,arguments)
-},{"./tools.js":105,"dup":47}],107:[function(require,module,exports){
+},{"./tools.js":107,"dup":47}],109:[function(require,module,exports){
 arguments[4][48][0].apply(exports,arguments)
-},{"bit-twiddle":86,"dup":48,"ndarray":104,"ndarray-fft":87,"ndarray-ops":97,"typedarray-pool":112}],108:[function(require,module,exports){
+},{"bit-twiddle":88,"dup":48,"ndarray":106,"ndarray-fft":89,"ndarray-ops":99,"typedarray-pool":114}],110:[function(require,module,exports){
 arguments[4][49][0].apply(exports,arguments)
-},{"dup":49}],109:[function(require,module,exports){
+},{"dup":49}],111:[function(require,module,exports){
 arguments[4][50][0].apply(exports,arguments)
-},{"dup":50}],110:[function(require,module,exports){
+},{"dup":50}],112:[function(require,module,exports){
 arguments[4][27][0].apply(exports,arguments)
-},{"dup":27}],111:[function(require,module,exports){
+},{"dup":27}],113:[function(require,module,exports){
 arguments[4][36][0].apply(exports,arguments)
-},{"dup":36}],112:[function(require,module,exports){
+},{"dup":36}],114:[function(require,module,exports){
 arguments[4][53][0].apply(exports,arguments)
-},{"bit-twiddle":110,"dup":53}],113:[function(require,module,exports){
+},{"bit-twiddle":112,"dup":53}],115:[function(require,module,exports){
 arguments[4][54][0].apply(exports,arguments)
-},{"detect-pitch":107,"dup":54,"frame-hop":108,"overlap-add":109,"typedarray-pool":112}],114:[function(require,module,exports){
+},{"detect-pitch":109,"dup":54,"frame-hop":110,"overlap-add":111,"typedarray-pool":114}],116:[function(require,module,exports){
 //     uuid.js
 //
 //     Copyright (c) 2010-2012 Robert Kieffer
@@ -15148,7 +15211,7 @@ arguments[4][54][0].apply(exports,arguments)
   }
 }).call(this);
 
-},{}],115:[function(require,module,exports){
+},{}],117:[function(require,module,exports){
 /**
  * Merge object b with object a.
  *
@@ -15173,7 +15236,7 @@ exports = module.exports = function(a, b){
   return a;
 };
 
-},{}],116:[function(require,module,exports){
+},{}],118:[function(require,module,exports){
 var touchy = require('./touchy.js')
 ,   uuid = require('node-uuid')
 ,   merge = require('utils-merge')
@@ -15428,7 +15491,7 @@ touch.prototype.handleMouse = function(x){
 
 
 
-},{"./touchy.js":117,"node-uuid":114,"utils-merge":115}],117:[function(require,module,exports){
+},{"./touchy.js":119,"node-uuid":116,"utils-merge":117}],119:[function(require,module,exports){
 /* Modernizr 2.6.2 (Custom Build) | MIT & BSD
  * Build: http://modernizr.com/download/#-touch-teststyles-prefixes
  */
@@ -16171,7 +16234,7 @@ Touchy.startWindowBounce = function () {
 
 module.exports = Touchy;
 
-},{}],118:[function(require,module,exports){
+},{}],120:[function(require,module,exports){
 "use strict";
 /* jshint esnext: false */
 
@@ -16338,7 +16401,7 @@ function encoder() {
 encoder.self = encoder.util = self;
 
 module.exports = encoder;
-},{}],119:[function(require,module,exports){
+},{}],121:[function(require,module,exports){
 "use strict";
 
 var _interopRequire = function (obj) { return obj && obj.__esModule ? obj["default"] : obj; };
@@ -16434,7 +16497,7 @@ var Encoder = (function () {
 })();
 
 module.exports = Encoder;
-},{"./encoder-worker":118,"inline-worker":121}],120:[function(require,module,exports){
+},{"./encoder-worker":120,"inline-worker":123}],122:[function(require,module,exports){
 "use strict";
 
 var _interopRequire = function (obj) { return obj && obj.__esModule ? obj["default"] : obj; };
@@ -16442,11 +16505,11 @@ var _interopRequire = function (obj) { return obj && obj.__esModule ? obj["defau
 var Encoder = _interopRequire(require("./encoder"));
 
 module.exports = Encoder;
-},{"./encoder":119}],121:[function(require,module,exports){
+},{"./encoder":121}],123:[function(require,module,exports){
 "use strict";
 
 module.exports = require("./inline-worker");
-},{"./inline-worker":122}],122:[function(require,module,exports){
+},{"./inline-worker":124}],124:[function(require,module,exports){
 (function (global){
 "use strict";
 
@@ -16498,7 +16561,7 @@ var InlineWorker = (function () {
 
 module.exports = InlineWorker;
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],123:[function(require,module,exports){
+},{}],125:[function(require,module,exports){
 var Resample = require('./resampler.js')
 var shift = require('pitch-shift')
 var jbuffers = require('jbuffers')
@@ -16599,9 +16662,9 @@ function mergeTracks(tracks, a){
   return track
 }
 
-},{"./resampler.js":124,"jbuffers":80,"pitch-shift":113}],124:[function(require,module,exports){
-arguments[4][83][0].apply(exports,arguments)
-},{"dup":83}],125:[function(require,module,exports){
+},{"./resampler.js":126,"jbuffers":82,"pitch-shift":115}],126:[function(require,module,exports){
+arguments[4][85][0].apply(exports,arguments)
+},{"dup":85}],127:[function(require,module,exports){
 var buffers = require('jbuffers')
 var through = require('through2')
 var jsynth = require('../jsynth')
@@ -16776,11 +16839,11 @@ module.exports = function(master, _buffer, cb, size){
 
 
 
-},{"../jsynth":138,"jbuffers":126,"through2":137}],126:[function(require,module,exports){
-arguments[4][80][0].apply(exports,arguments)
-},{"dup":80}],127:[function(require,module,exports){
+},{"../jsynth":140,"jbuffers":128,"through2":139}],128:[function(require,module,exports){
+arguments[4][82][0].apply(exports,arguments)
+},{"dup":82}],129:[function(require,module,exports){
 arguments[4][12][0].apply(exports,arguments)
-},{"./_stream_readable":128,"./_stream_writable":130,"_process":10,"core-util-is":131,"dup":12,"inherits":132}],128:[function(require,module,exports){
+},{"./_stream_readable":130,"./_stream_writable":132,"_process":10,"core-util-is":133,"dup":12,"inherits":134}],130:[function(require,module,exports){
 (function (process){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -17766,7 +17829,7 @@ function indexOf (xs, x) {
 }
 
 }).call(this,require('_process'))
-},{"_process":10,"buffer":2,"core-util-is":131,"events":6,"inherits":132,"isarray":133,"stream":22,"string_decoder/":134}],129:[function(require,module,exports){
+},{"_process":10,"buffer":2,"core-util-is":133,"events":6,"inherits":134,"isarray":135,"stream":22,"string_decoder/":136}],131:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -17978,7 +18041,7 @@ function done(stream, er) {
   return stream.push(null);
 }
 
-},{"./_stream_duplex":127,"core-util-is":131,"inherits":132}],130:[function(require,module,exports){
+},{"./_stream_duplex":129,"core-util-is":133,"inherits":134}],132:[function(require,module,exports){
 (function (process){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -18368,17 +18431,17 @@ function endWritable(stream, state, cb) {
 }
 
 }).call(this,require('_process'))
-},{"./_stream_duplex":127,"_process":10,"buffer":2,"core-util-is":131,"inherits":132,"stream":22}],131:[function(require,module,exports){
+},{"./_stream_duplex":129,"_process":10,"buffer":2,"core-util-is":133,"inherits":134,"stream":22}],133:[function(require,module,exports){
 arguments[4][17][0].apply(exports,arguments)
-},{"buffer":2,"dup":17}],132:[function(require,module,exports){
+},{"buffer":2,"dup":17}],134:[function(require,module,exports){
 arguments[4][7][0].apply(exports,arguments)
-},{"dup":7}],133:[function(require,module,exports){
+},{"dup":7}],135:[function(require,module,exports){
 arguments[4][8][0].apply(exports,arguments)
-},{"dup":8}],134:[function(require,module,exports){
+},{"dup":8}],136:[function(require,module,exports){
 arguments[4][23][0].apply(exports,arguments)
-},{"buffer":2,"dup":23}],135:[function(require,module,exports){
+},{"buffer":2,"dup":23}],137:[function(require,module,exports){
 arguments[4][20][0].apply(exports,arguments)
-},{"./lib/_stream_transform.js":129,"dup":20}],136:[function(require,module,exports){
+},{"./lib/_stream_transform.js":131,"dup":20}],138:[function(require,module,exports){
 module.exports = extend
 
 function extend() {
@@ -18397,7 +18460,7 @@ function extend() {
     return target
 }
 
-},{}],137:[function(require,module,exports){
+},{}],139:[function(require,module,exports){
 (function (process){
 var Transform = require('readable-stream/transform')
   , inherits  = require('util').inherits
@@ -18497,7 +18560,7 @@ module.exports.obj = through2(function (options, transform, flush) {
 })
 
 }).call(this,require('_process'))
-},{"_process":10,"readable-stream/transform":135,"util":25,"xtend":136}],138:[function(require,module,exports){
+},{"_process":10,"readable-stream/transform":137,"util":25,"xtend":138}],140:[function(require,module,exports){
 module.exports = function (context, fn, bufSize) {
 
     if (typeof context === 'function') {
@@ -18611,7 +18674,7 @@ function signed (n) {
     ;
 }
 
-},{}],139:[function(require,module,exports){
+},{}],141:[function(require,module,exports){
 var close = require('closeness')
 
 module.exports = function(node, points, fn){
@@ -18735,13 +18798,13 @@ function findPos(obj) {
   };
 };
 
-},{"closeness":140}],140:[function(require,module,exports){
+},{"closeness":142}],142:[function(require,module,exports){
 module.exports = function(num, dist){
 	return function(val){
 		return (Math.abs(num - val) < dist)
 	}
 };
-},{}],141:[function(require,module,exports){
+},{}],143:[function(require,module,exports){
 (function (process){
 var Stream = require('stream')
 
@@ -18853,7 +18916,7 @@ function through (write, end, opts) {
 
 
 }).call(this,require('_process'))
-},{"_process":10,"stream":22}],142:[function(require,module,exports){
+},{"_process":10,"stream":22}],144:[function(require,module,exports){
 (function (process){
 var through = require('through');
 var path = require('path');
@@ -19304,4 +19367,4 @@ function maybeCallback(cb) {
 
 
 }).call(this,require('_process'))
-},{"_process":10,"path":9,"through":141}]},{},[60]);
+},{"_process":10,"path":9,"through":143}]},{},[61]);

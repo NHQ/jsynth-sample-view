@@ -83,13 +83,24 @@ body.appendChild(ctrls)
     sample.pause()
 //    sample.emit('pause')
   })
+  on(ui.$bpmchop, 'touchdown', function(e){
+    var n = ui.bpmRange.value
+    sample.chop(n, function(e, chops){
+      chops.forEach(function(e){
+        createSample([e], function(_sample){
+          console.log(_sample)
+          _sample.index = samples.length
+          samples.push(_sample)
+        })
+    })})
+  })
   on(ui.$slice, 'touchdown', function(e){
     var cut = sample.slice()
     var params = sample.getParams()
     console.log(params)
     cut = resample(master.sampleRate, cut, params)
     console.log(cut)
-    createSample(cut, function(_sample){
+    createSample([cut], function(_sample){
        
       samples.push(_sample)
     })
@@ -116,7 +127,7 @@ ready(function(){
 function keydown(evt){
   var char = charcode(evt)
   if(evt.srcElement.tagName === 'INPUT') return
-  console.log(evt)
+  console.log(char)
   var timeIn = evt.timeStamp 
   switch (char){
     case 'i':
@@ -132,6 +143,10 @@ function keydown(evt){
     case '[':
     break;
     case ']':
+    break;
+    case 'space':
+      evt.preventDefault()
+      sample.play()
     break;
     case 'delete':
     break;
@@ -152,17 +167,32 @@ function createSample(buff, cb){
   on(div, 'focus', function(){
     console.log(this.tabIndex)
     sample = samples[this.tabIndex-1]
+    console.log(sample)
   })
-  master.decodeAudioData(buff, function(buffer){
-    var tracks = []
-    for(var x = 0; x < buffer.numberOfChannels; x++){
-      tracks.push(buffer.getChannelData(x))
-    }
+  if(Array.isArray(buff)){
+    
+    // buf is an array of channel datas in float32 type arrays
+    // node need to decode
+
+    var tracks = buff
 
     var s = new sampler(master, tracks, div, function(err, src){})
 
     cb(s)
 
-  })
+  }
+  else{
+    master.decodeAudioData(buff, function(buffer){
+      var tracks = []
+      for(var x = 0; x < buffer.numberOfChannels; x++){
+        tracks.push(buffer.getChannelData(x))
+      }
+
+      var s = new sampler(master, tracks, div, function(err, src){})
+
+      cb(s)
+
+    })
+  }
   return div 
 }
