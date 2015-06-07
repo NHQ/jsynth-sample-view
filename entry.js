@@ -1,4 +1,6 @@
 var path = require('path')
+//var hboot = require('hyperboot/rpc')
+//hboot.toggle()
 var on = require('dom-event')
 var fs = require('fs')
 var nb = require('../nbfs') // note-bene
@@ -10,18 +12,46 @@ var charcode = require('keycode')
 var drop = require('drag-drop/buffer')
 var ready = require('doc-ready')
 var hover = require('../mousearound')
+var filebutton = require('file-button')
 var resample = require('jsynth-resampler')
 var dlblob = require('./blob')
+var _import = require('./import')
 var sampler = require('./')
 var master = new AudioContext
 var sample = undefined // selected sample
 var ctrls = fs.readFileSync('./controls.html', 'utf8')
-var div = document.createElement('div')
-div.innerHTML = ctrls
-ctrls = div.firstChild
+var menu = fs.readFileSync('./menubar.html', 'utf8')
 var samples = []
 var body = document.body 
-body.appendChild(ctrls)
+
+
+ready(function(){
+  ctrls = ghost(ctrls)
+  body.appendChild(ctrls)
+  menu = ghost(menu)
+  body.appendChild(menu)
+  var menui = uis(menu)
+  filebutton.create({accept: 'audio/*'}).on('fileinput',function(input){
+    _import(input.files, function(files){
+      files.forEach(function(e){
+        var _sample = createSample(e.buffer, function(_sample){
+          var n = files[0].name
+          n = n.slice(0, n.lastIndexOf('.'))
+          _sample.name = n
+          sample = _sample
+          _sample.index = samples.length
+          samples.push(_sample)
+        })
+      })
+    })
+  }).mount(menui.import)
+
+  function ghost(html){
+    var div = document.createElement('div')
+    div.innerHTML = html
+    return div.firstChild
+  }
+
 
   var ui = uis(ctrls)
   var loop = 0 
@@ -83,8 +113,8 @@ body.appendChild(ctrls)
     sample.pause()
 //    sample.emit('pause')
   })
-  on(ui.$bpmchop, 'touchdown', function(e){
-    var n = ui.bpmRange.value
+  on(ui.$xchop, 'touchdown', function(e){
+    var n = parseInt(ui.$xchopval.value)
     sample.chop(n, function(e, chops){
       chops.forEach(function(e){
         createSample([e], function(_sample){
@@ -105,17 +135,17 @@ body.appendChild(ctrls)
       samples.push(_sample)
     })
   })
-
-ready(function(){
   drop(body, function(files){
-    var buff = files[0].buffer
-    var _sample = createSample(buff, function(_sample){
-      var n = files[0].name
-      n = n.slice(0, n.lastIndexOf('.'))
-      _sample.name = n
-      sample = _sample
-      _sample.index = samples.length
-      samples.push(_sample)
+    files.forEach(function(e){
+      var _sample = createSample(e.buffer, function(_sample){
+        var n = files[0].name
+        n = n.slice(0, n.lastIndexOf('.'))
+        _sample.name = n
+        sample = _sample
+        _sample.index = samples.length
+        samples.push(_sample)
+      })
+    
     })
   })
 
@@ -172,7 +202,7 @@ function createSample(buff, cb){
   if(Array.isArray(buff)){
     
     // buf is an array of channel datas in float32 type arrays
-    // node need to decode
+    // no need to decode
 
     var tracks = buff
 

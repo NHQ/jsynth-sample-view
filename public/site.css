@@ -1,3 +1,6 @@
+body{
+  height:101%;
+}
 .sample-container{
   width:100%;
   position:relative;
@@ -20,17 +23,57 @@
 .sample canvas{
   z-index:3;
 }
+.menubox{
+  width:30%;
+  height: 67px;
+  margin:0;
+  position:fixed;
+  top:11px;
+  right:11px;
+  display:flex;
+  flex-direction:row;
+}
+
 .ctrlbox{
   width: 30%;
   height: 50%;
   margin: 0;
   position:fixed;
-  top:21px;
+  top:89px;
   right: 11px;
   display:flex;
   flex-direction: row;
   flex-wrap:wrap;
   z-index:1;
+}
+.menubox button, .menubox input[type=file], .menubox input[type=text]{
+  height: 100%;
+  margin: 0;
+  flex: 1 1 25%;
+  display:inline-block;
+  font-size: 25px;
+  font-weight: 200;
+}
+.menubox input[type=file]{
+  flex:2 2 25%;
+  font-size:44px;
+  color:transparent;
+}
+.menubox input[type=checkbox]{
+  height: 50%;
+  padding:0;
+  margin: 11px;
+  flex: 0 1 5%;
+  align-self:center;
+}
+.menubox label{
+  align-self:center;
+  height: 50%;
+  margin:0;
+  padding:0 0 0 0%;
+  flex: 1 1 8%;
+  font-size:22px;
+  width:20%;
 }
 .ctrlbox button, .ctrlbox input[type=text]{
   height: 20%;

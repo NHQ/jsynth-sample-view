@@ -12219,7 +12219,7 @@ module.exports = function(buf, sampleRate, click, cb){
 
 }
 
-},{"wav-encoder":122}],59:[function(require,module,exports){
+},{"wav-encoder":135}],59:[function(require,module,exports){
 module.exports = function(buff, chops){
   var ab = buff.buffer
   var buffs = []
@@ -12305,8 +12305,10 @@ function draw(parent, master){
   }
 }
 
-},{"./install-canvas":63,"events":6,"inherits":81,"jsynth-waveform":86}],61:[function(require,module,exports){
+},{"./install-canvas":64,"events":6,"inherits":90,"jsynth-waveform":95}],61:[function(require,module,exports){
 var path = require('path')
+//var hboot = require('hyperboot/rpc')
+//hboot.toggle()
 var on = require('dom-event')
 
 var nb = require('../nbfs') // note-bene
@@ -12318,18 +12320,46 @@ var charcode = require('keycode')
 var drop = require('drag-drop/buffer')
 var ready = require('doc-ready')
 var hover = require('../mousearound')
+var filebutton = require('file-button')
 var resample = require('jsynth-resampler')
 var dlblob = require('./blob')
+var _import = require('./import')
 var sampler = require('./')
 var master = new AudioContext
 var sample = undefined // selected sample
-var ctrls = "<div id=ctrls class=ctrlbox>\n  <button id=$play class=play>&gt</button>\n  <button id=$pause class=pause>||</button>\n  <button id=$playloop class=playloop>|&#8212&gt</button>\n  <button id=$loop class=loop><span style=\"font-size:100%;line-height:0\">&#9775</span></button>\n  <button id=$setIn class=setin>&#254&#8212</button>\n  <button id=$setOut class=\"setout reverse\"><span sytyle=\"font-size:300%\">&#254</span>&#8212</button>\n  <button id=$slice class=slice>8&lt--</button>\n  <button id=$reverse class=reverse>R</button>\n  <button id=$bpmchop class=bpmchop>chop(BPM)</button>\n  <button id=$xchop class=xchop>chop(x)&#8212&gt</button>\n  <input type=text id=pitchRange value=1>\n  <br />\n  <input type=range min=1 max=220 value=60 step=.1 id=bpm></input>\n  <input type=text id=bpmRange value=60>\n  <input type=range min=0 max=10 value=1 step=.1 id=amplitude></input>\n  <input type=text id=ampRange value=1>\n  <input type=range min=0 max=2 value=1 step=.01 id=speed></input>\n  <input type=text id=speedRange value=1>\n  <input type=range min=0 max=2 value=1 step=.01 id=pitch></input>\n  <input type=text id=pitchRange value=1>\n  <br />\n  <button id=save class=save>SAVE</button>\n  <button id=export class=export>EXPORT</button>\n  <button id=reset class=reset>RESET</button>\n  <button id=delete class=delete>DEL</button>\n</div>\n"
-var div = document.createElement('div')
-div.innerHTML = ctrls
-ctrls = div.firstChild
+var ctrls = "<div id=ctrls class=ctrlbox>\n  <button id=$play class=play>&gt</button>\n  <button id=$pause class=pause>||</button>\n  <button id=$playloop class=playloop>|&#8212&gt</button>\n  <button id=$loop class=loop><span style=\"font-size:100%;line-height:0\">&#9775</span></button>\n  <button id=$setIn class=setin>&#254&#8212</button>\n  <button id=$setOut class=\"setout reverse\"><span sytyle=\"font-size:300%\">&#254</span>&#8212</button>\n  <button id=$slice class=slice>8&lt--</button>\n  <button id=$reverse class=reverse>R</button>\n  <button id=$bpmchop class=bpmchop>chop(BPM)</button>\n  <button id=$xchop class=xchop>chop(x)&#8212&gt</button>\n  <input type=text id=$xchopval value=1>\n  <br />\n  <input type=range min=1 max=220 value=60 step=.1 id=bpm></input>\n  <input type=text id=bpmRange value=60>\n  <input type=range min=0 max=10 value=1 step=.1 id=amplitude></input>\n  <input type=text id=ampRange value=1>\n  <input type=range min=0 max=2 value=1 step=.01 id=speed></input>\n  <input type=text id=speedRange value=1>\n  <input type=range min=0 max=2 value=1 step=.01 id=pitch></input>\n  <input type=text id=pitchRange value=1>\n  <br />\n  <button id=save class=save>SAVE</button>\n  <button id=export class=export>EXPORT</button>\n  <button id=reset class=reset>RESET</button>\n  <button id=delete class=delete>DEL</button>\n</div>\n"
+var menu = "<div id=menubar class=menubox>\n  <button id=import class=import>import</button>\n  <input type=checkbox id=micline>\n  </input>\n  <label for=micline>line / mic</label>\n  <button id=record class=record>record</button>\n</div>\n"
 var samples = []
 var body = document.body 
-body.appendChild(ctrls)
+
+
+ready(function(){
+  ctrls = ghost(ctrls)
+  body.appendChild(ctrls)
+  menu = ghost(menu)
+  body.appendChild(menu)
+  var menui = uis(menu)
+  filebutton.create({accept: 'audio/*'}).on('fileinput',function(input){
+    _import(input.files, function(files){
+      files.forEach(function(e){
+        var _sample = createSample(e.buffer, function(_sample){
+          var n = files[0].name
+          n = n.slice(0, n.lastIndexOf('.'))
+          _sample.name = n
+          sample = _sample
+          _sample.index = samples.length
+          samples.push(_sample)
+        })
+      })
+    })
+  }).mount(menui.import)
+
+  function ghost(html){
+    var div = document.createElement('div')
+    div.innerHTML = html
+    return div.firstChild
+  }
+
 
   var ui = uis(ctrls)
   var loop = 0 
@@ -12391,8 +12421,8 @@ body.appendChild(ctrls)
     sample.pause()
 //    sample.emit('pause')
   })
-  on(ui.$bpmchop, 'touchdown', function(e){
-    var n = ui.bpmRange.value
+  on(ui.$xchop, 'touchdown', function(e){
+    var n = parseInt(ui.$xchopval.value)
     sample.chop(n, function(e, chops){
       chops.forEach(function(e){
         createSample([e], function(_sample){
@@ -12413,17 +12443,17 @@ body.appendChild(ctrls)
       samples.push(_sample)
     })
   })
-
-ready(function(){
   drop(body, function(files){
-    var buff = files[0].buffer
-    var _sample = createSample(buff, function(_sample){
-      var n = files[0].name
-      n = n.slice(0, n.lastIndexOf('.'))
-      _sample.name = n
-      sample = _sample
-      _sample.index = samples.length
-      samples.push(_sample)
+    files.forEach(function(e){
+      var _sample = createSample(e.buffer, function(_sample){
+        var n = files[0].name
+        n = n.slice(0, n.lastIndexOf('.'))
+        _sample.name = n
+        sample = _sample
+        _sample.index = samples.length
+        samples.push(_sample)
+      })
+    
     })
   })
 
@@ -12480,7 +12510,7 @@ function createSample(buff, cb){
   if(Array.isArray(buff)){
     
     // buf is an array of channel datas in float32 type arrays
-    // node need to decode
+    // no need to decode
 
     var tracks = buff
 
@@ -12505,7 +12535,30 @@ function createSample(buff, cb){
   return div 
 }
 
-},{"../mousearound":141,"../nbfs":144,"./":62,"./blob":58,"doc-ready":65,"dom-event":67,"drag-drop/buffer":68,"getids":80,"jsynth-resampler":84,"keycode":87,"path":9,"touchdown":118}],62:[function(require,module,exports){
+},{"../mousearound":154,"../nbfs":157,"./":63,"./blob":58,"./import":62,"doc-ready":69,"dom-event":71,"drag-drop/buffer":72,"file-button":84,"getids":89,"jsynth-resampler":93,"keycode":96,"path":9,"touchdown":131}],62:[function(require,module,exports){
+var parallel = require('run-parallel')
+var blobToBuffer = require('blob-to-buffer')
+
+module.exports = function (files, cb) {
+  var tasks = Array.prototype.map.call(files, function (file) {
+    return function (cb) {
+      blobToBuffer(file, function (err, buffer) {
+        if (err) return cb(err)
+        buffer.name = file.name
+        buffer.size = file.size
+        buffer.type = file.type
+        buffer.lastModifiedDate = file.lastModifiedDate
+        cb(null, buffer)
+      })
+    }
+  })
+  parallel(tasks, function (err, results) {
+    if (err) throw err
+    cb(results)
+  })
+}
+
+},{"blob-to-buffer":66,"run-parallel":125}],63:[function(require,module,exports){
 var emitter = require('events').EventEmitter
 var inherits = require('inherits')
 inherits(sampler, emitter)
@@ -12882,7 +12935,7 @@ function sampler (master, buff, parel, cb){
 
 
 
-},{"../jsynth-pitch-shift":26,"../jsynth-stream-buf":127,"./chop":59,"./draw":60,"./loop":64,"./resample.js":125,"dom-event":67,"events":6,"getids":80,"inherits":81,"jbuffers":82,"jsynth-file-sample":83,"keycode":87,"touchdown":118}],63:[function(require,module,exports){
+},{"../jsynth-pitch-shift":26,"../jsynth-stream-buf":140,"./chop":59,"./draw":60,"./loop":65,"./resample.js":138,"dom-event":71,"events":6,"getids":89,"inherits":90,"jbuffers":91,"jsynth-file-sample":92,"keycode":96,"touchdown":131}],64:[function(require,module,exports){
 module.exports = function(parent){
   if(!parent) parent = document.body
   var index = []
@@ -12915,7 +12968,7 @@ function getCSS(el, prop){
 }
 
 
-},{}],64:[function(require,module,exports){
+},{}],65:[function(require,module,exports){
 module.exports = function(buff, loops){
   var ab = buff.buffer
   var nbuff = new Float32Array(Math.floor(buff.length * loops))
@@ -12927,7 +12980,111 @@ module.exports = function(buff, loops){
   return nbuff
 }
 
-},{}],65:[function(require,module,exports){
+},{}],66:[function(require,module,exports){
+/* global Blob, FileReader */
+
+// arraybuffer -> buffer without copy
+var toBuffer = require('typedarray-to-buffer')
+
+module.exports = function blobToBuffer (blob, cb) {
+  if (typeof Blob === 'undefined' || !(blob instanceof Blob)) {
+    throw new Error('first argument must be a Blob')
+  }
+  if (typeof cb !== 'function') {
+    throw new Error('second argument must be a function')
+  }
+
+  var reader = new FileReader()
+
+  function onLoadEnd (e) {
+    reader.removeEventListener('loadend', onLoadEnd, false)
+    if (e.error) cb(e.error)
+    else cb(null, toBuffer(reader.result))
+  }
+
+  reader.addEventListener('loadend', onLoadEnd, false)
+  reader.readAsArrayBuffer(blob)
+}
+
+},{"typedarray-to-buffer":67}],67:[function(require,module,exports){
+(function (Buffer){
+/**
+ * Convert a typed array to a Buffer without a copy
+ *
+ * Author:   Feross Aboukhadijeh <feross@feross.org> <http://feross.org>
+ * License:  MIT
+ *
+ * `npm install typedarray-to-buffer`
+ */
+
+var isTypedArray = require('is-typedarray').strict
+
+module.exports = function (arr) {
+  // If `Buffer` is the browser `buffer` module, and the browser supports typed arrays,
+  // then avoid a copy. Otherwise, create a `Buffer` with a copy.
+  var constructor = Buffer.TYPED_ARRAY_SUPPORT
+    ? Buffer._augment
+    : function (arr) { return new Buffer(arr) }
+
+  if (arr instanceof Uint8Array) {
+    return constructor(arr)
+  } else if (arr instanceof ArrayBuffer) {
+    return constructor(new Uint8Array(arr))
+  } else if (isTypedArray(arr)) {
+    // Use the typed array's underlying ArrayBuffer to back new Buffer. This respects
+    // the "view" on the ArrayBuffer, i.e. byteOffset and byteLength. No copy.
+    return constructor(new Uint8Array(arr.buffer, arr.byteOffset, arr.byteLength))
+  } else {
+    // Unsupported type, just pass it through to the `Buffer` constructor.
+    return new Buffer(arr)
+  }
+}
+
+}).call(this,require("buffer").Buffer)
+},{"buffer":2,"is-typedarray":68}],68:[function(require,module,exports){
+module.exports      = isTypedArray
+isTypedArray.strict = isStrictTypedArray
+isTypedArray.loose  = isLooseTypedArray
+
+var toString = Object.prototype.toString
+var names = {
+    '[object Int8Array]': true
+  , '[object Int16Array]': true
+  , '[object Int32Array]': true
+  , '[object Uint8Array]': true
+  , '[object Uint8ClampedArray]': true
+  , '[object Uint16Array]': true
+  , '[object Uint32Array]': true
+  , '[object Float32Array]': true
+  , '[object Float64Array]': true
+}
+
+function isTypedArray(arr) {
+  return (
+       isStrictTypedArray(arr)
+    || isLooseTypedArray(arr)
+  )
+}
+
+function isStrictTypedArray(arr) {
+  return (
+       arr instanceof Int8Array
+    || arr instanceof Int16Array
+    || arr instanceof Int32Array
+    || arr instanceof Uint8Array
+    || arr instanceof Uint8ClampedArray
+    || arr instanceof Uint16Array
+    || arr instanceof Uint32Array
+    || arr instanceof Float32Array
+    || arr instanceof Float64Array
+  )
+}
+
+function isLooseTypedArray(arr) {
+  return names[toString.call(arr)]
+}
+
+},{}],69:[function(require,module,exports){
 /*!
  * docReady v1.0.3
  * Cross browser DOMContentLoaded event emitter
@@ -13001,7 +13158,7 @@ if ( typeof define === 'function' && define.amd ) {
 
 })( window );
 
-},{"eventie":66}],66:[function(require,module,exports){
+},{"eventie":70}],70:[function(require,module,exports){
 /*!
  * eventie v1.0.6
  * event binding helper
@@ -13085,7 +13242,7 @@ if ( typeof define === 'function' && define.amd ) {
 
 })( window );
 
-},{}],67:[function(require,module,exports){
+},{}],71:[function(require,module,exports){
 module.exports = on;
 module.exports.on = on;
 module.exports.off = off;
@@ -13102,7 +13259,7 @@ function off (element, event, callback, capture) {
   return callback;
 }
 
-},{}],68:[function(require,module,exports){
+},{}],72:[function(require,module,exports){
 module.exports = DragDropAsBuffer
 
 var dragDrop = require('./')
@@ -13130,7 +13287,7 @@ function DragDropAsBuffer (elem, cb) {
   })
 }
 
-},{"./":69,"blob-to-buffer":70,"run-parallel":76}],69:[function(require,module,exports){
+},{"./":73,"blob-to-buffer":74,"run-parallel":80}],73:[function(require,module,exports){
 module.exports = dragDrop
 
 var throttle = require('lodash.throttle')
@@ -13188,7 +13345,7 @@ function makeOnDrop (elem, cb) {
   }
 }
 
-},{"lodash.throttle":73}],70:[function(require,module,exports){
+},{"lodash.throttle":77}],74:[function(require,module,exports){
 var toBuffer = require('typedarray-to-buffer')
 
 module.exports = function blobToBuffer (blob, cb) {
@@ -13207,42 +13364,9 @@ module.exports = function blobToBuffer (blob, cb) {
   reader.readAsArrayBuffer(blob)
 }
 
-},{"typedarray-to-buffer":71}],71:[function(require,module,exports){
-(function (Buffer){
-/**
- * Convert a typed array to a Buffer without a copy
- *
- * Author:   Feross Aboukhadijeh <feross@feross.org> <http://feross.org>
- * License:  MIT
- *
- * `npm install typedarray-to-buffer`
- */
-
-var isTypedArray = require('is-typedarray').strict
-
-module.exports = function (arr) {
-  // If `Buffer` is the browser `buffer` module, and the browser supports typed arrays,
-  // then avoid a copy. Otherwise, create a `Buffer` with a copy.
-  var constructor = Buffer.TYPED_ARRAY_SUPPORT
-    ? Buffer._augment
-    : function (arr) { return new Buffer(arr) }
-
-  if (arr instanceof Uint8Array) {
-    return constructor(arr)
-  } else if (arr instanceof ArrayBuffer) {
-    return constructor(new Uint8Array(arr))
-  } else if (isTypedArray(arr)) {
-    // Use the typed array's underlying ArrayBuffer to back new Buffer. This respects
-    // the "view" on the ArrayBuffer, i.e. byteOffset and byteLength. No copy.
-    return constructor(new Uint8Array(arr.buffer, arr.byteOffset, arr.byteLength))
-  } else {
-    // Unsupported type, just pass it through to the `Buffer` constructor.
-    return new Buffer(arr)
-  }
-}
-
-}).call(this,require("buffer").Buffer)
-},{"buffer":2,"is-typedarray":72}],72:[function(require,module,exports){
+},{"typedarray-to-buffer":75}],75:[function(require,module,exports){
+arguments[4][67][0].apply(exports,arguments)
+},{"buffer":2,"dup":67,"is-typedarray":76}],76:[function(require,module,exports){
 module.exports      = isTypedArray
 isTypedArray.strict = isStrictTypedArray
 isTypedArray.loose  = isLooseTypedArray
@@ -13283,7 +13407,7 @@ function isLooseTypedArray(arr) {
   return names[toString.call(arr)]
 }
 
-},{}],73:[function(require,module,exports){
+},{}],77:[function(require,module,exports){
 /**
  * lodash 3.0.2 (Custom Build) <https://lodash.com/>
  * Build: `lodash modern modularize exports="npm" -o ./`
@@ -13391,7 +13515,7 @@ function isObject(value) {
 
 module.exports = throttle;
 
-},{"lodash.debounce":74}],74:[function(require,module,exports){
+},{"lodash.debounce":78}],78:[function(require,module,exports){
 /**
  * lodash 3.0.3 (Custom Build) <https://lodash.com/>
  * Build: `lodash modern modularize exports="npm" -o ./`
@@ -13632,7 +13756,7 @@ function isObject(value) {
 
 module.exports = debounce;
 
-},{"lodash.isnative":75}],75:[function(require,module,exports){
+},{"lodash.isnative":79}],79:[function(require,module,exports){
 /**
  * lodash 3.0.2 (Custom Build) <https://lodash.com/>
  * Build: `lodash modern modularize exports="npm" -o ./`
@@ -13749,7 +13873,7 @@ function escapeRegExp(string) {
 
 module.exports = isNative;
 
-},{}],76:[function(require,module,exports){
+},{}],80:[function(require,module,exports){
 var dezalgo = require('dezalgo')
 
 module.exports = function (tasks, cb) {
@@ -13789,7 +13913,7 @@ module.exports = function (tasks, cb) {
   }
 }
 
-},{"dezalgo":77}],77:[function(require,module,exports){
+},{"dezalgo":81}],81:[function(require,module,exports){
 var wrappy = require('wrappy')
 module.exports = wrappy(dezalgo)
 
@@ -13813,7 +13937,7 @@ function dezalgo (cb) {
   }
 }
 
-},{"asap":78,"wrappy":79}],78:[function(require,module,exports){
+},{"asap":82,"wrappy":83}],82:[function(require,module,exports){
 (function (process){
 
 // Use the fastest possible means to execute a task in a future turn
@@ -13930,7 +14054,7 @@ module.exports = asap;
 
 
 }).call(this,require('_process'))
-},{"_process":10}],79:[function(require,module,exports){
+},{"_process":10}],83:[function(require,module,exports){
 // Returns a wrapper function that returns a wrapped callback
 // The wrapper function should do some stuff, and return a
 // presumably different callback function.
@@ -13965,7 +14089,462 @@ function wrappy (fn, cb) {
   }
 }
 
-},{}],80:[function(require,module,exports){
+},{}],84:[function(require,module,exports){
+'use strict';
+
+module.exports = require('./lib');
+},{"./lib":85}],85:[function(require,module,exports){
+'use strict';
+
+var Emitter = require('component-emitter');
+
+var utils = require('./utils'),
+    css = utils.css,
+    listenTo = utils.listenTo,
+    unListenTo = utils.unListenTo,
+    isObject = utils.isObject,
+    fileinput = utils.fileinput;
+
+/**
+ *
+ * @param {Object} options
+ * @return {FileButton}
+ * @publics
+ */
+exports.create = function(options) {
+  return new FileButton(options);
+};
+
+function FileButton(options) {
+  this._options = isObject(options) ? options : {};
+
+  // key nodes
+  this._el = null;
+  this._fileinput = null;
+
+  // listener
+  this._onFileChange = onFileChange.bind(this);
+
+  // states
+  this._enabled = true;
+}
+
+/**
+ * Mixin
+ */
+Emitter(FileButton.prototype);
+
+/**
+ * Mount FileButton instance on a DOM element
+ * @param {HTMLElement} el
+ * @return {FileButton}
+ * @public
+ */
+FileButton.prototype.mount = function(el) {
+  if (this._el) return;
+  this._el = css(el, {position: 'relative', overflow: 'hidden'});
+  this._render();
+  return this;
+};
+
+/**
+ * Disable the button
+ * @return {FileButton}
+ */
+
+FileButton.prototype.disable = function() {
+  if (!this._enabled || !this._el) return this;
+  this._fileinput.style.display = 'none';
+  this._enabled = false;
+  return this;
+};
+
+/**
+ * Enable the button
+ * @return {FileButton}
+ */
+
+FileButton.prototype.enable = function() {
+  if (this._enabled || !this._el) return this;
+  this._fileinput.style.display = '';
+  this._enabled = true;
+  return this;
+};
+
+/**
+ * Destroy the button
+ */
+
+FileButton.prototype.destroy = function() {
+  if (!this._onFileChange) return;
+  if (this._fileinput) unListenTo(this._fileinput, this._onFileChange);
+  if (this._fileinput.parentNode) this._fileinput.parentNode.removeChild(this._fileinput);
+  this._onFileChange = null;
+  this._el = null;
+  this._enabled = null;
+  this.emit('destroyed');
+  this.off();
+};
+
+/**
+ * Insert File Input inside the element
+ * @private
+ */
+
+FileButton.prototype._render = function() {
+  if (this._fileinput) unListenTo(this._fileinput, this._onFileChange);
+
+  this._fileinput = fileinput(this._options);
+  this._el.appendChild(this._fileinput);
+  listenTo(this._fileinput, this._onFileChange);
+};
+
+/**
+ * listeners
+ */
+
+/**
+ * @private
+ */
+
+var onFileChange = function() {
+  if (!this._fileinput) return;
+  var fileinput = this._fileinput.parentNode.removeChild(this._fileinput);
+  this.emit('fileinput', fileinput);
+  this._render();
+};
+},{"./utils":87,"component-emitter":88}],86:[function(require,module,exports){
+'use strict';
+
+/**
+ * Detect if safari browser on windows
+ * @returns {boolean}
+ */
+
+exports.isWinSafari = function(){
+
+  var ua = navigator.userAgent.toLowerCase();
+  var support;
+
+  // browser detection for windows safari
+  // black berry safari might also has issue
+  support =  !!(~ua.indexOf("windows") &&
+      ~ua.indexOf("safari/") &&
+      !~ua.indexOf("chrome"));
+
+  exports.isWinSafari = function(){return support};
+  return support;
+};
+
+/**
+ * Detect if file input support multiple select feature
+ * @returns {boolean}
+ */
+
+exports.multipleFiles = function(){
+  var input = document.createElement('input');
+  var support;
+
+  input.type = 'file';
+  support = 'multiple' in input && !this.isWinSafari();
+  exports.multipleFiles = function(){ return support};
+  return support;
+};
+
+},{}],87:[function(require,module,exports){
+'use strict';
+
+/**
+ * Module dependencies
+ */
+
+var root = window,
+    document = window.document;
+var support = require('./support');
+
+/**
+ *
+ * @param {HTMLElement} elm
+ * @param styles
+ * @returns {HTMLElement}
+ * @public
+ */
+exports.css = function(elm, styles){
+  var i;
+  if (typeof styles.opacity == "number" && typeof elm.style.opacity !== 'string'){
+    // for IE
+    // cannot use typeof to detect elm.filters
+    styles.filter = 'alpha(opacity=' + Math.round(100 * styles.opacity) + ')';
+  }
+  for(i in styles){
+    if(styles.hasOwnProperty(i)) elm.style[i] = styles[i];
+  }
+  return elm;
+};
+
+/**
+ * Listen to change event
+ * @param {HTMLElement} el
+ * @param {Function} fn
+ * @public
+ */
+
+exports.listenTo = function(el, fn) {
+  el.addEventListener ? el.addEventListener('change', fn) : el.attachEvent('onchange', fn);
+};
+
+/**
+ * Unlisten to change event
+ * @param {HTMLElement} el
+ * @param fn
+ * @public
+ */
+
+exports.unListenTo = function(el, fn) {
+  el.removeEventListener ? el.removeEventListener('change', fn) : el.detachEvent('onchange', fn);
+};
+
+exports.isObject = function(obj) {
+  return obj === Object(obj);
+};
+
+
+var styles = {
+  position: 'absolute',
+  top: 0,
+  right: 0,
+  // no left to make the button starting from the right
+  margin: 0,
+  padding: 0,
+  opacity: 0,
+  cursor: 'pointer'
+};
+
+/**
+ * Return a file input with styling
+ * @param {Object} options
+ * @return {HTMLInputElement}
+ * @public
+ */
+
+exports.fileinput = function(options) {
+
+  var defaults = {
+    multiple: true,
+    accept: null,
+    fieldName: 'ajaxfile'
+  };
+
+  var input = document.createElement('input');
+
+  // set up options
+  if (exports.isObject(options)) {
+    options.multiple = typeof options.multiple == 'boolean' ? options.multiple : defaults.multiple;
+    options.accept = typeof options.accept == 'string' ? options.accept : defaults.accept;
+    options.fieldName = typeof options.fieldName == 'string' ? options.fieldName : defaults.fieldName;
+  }
+  else {
+    options = defaults;
+  }
+
+  // set up fileinput
+  if (options.multiple && support.multipleFiles()) input.setAttribute('multiple', 'multiple');
+  if (options.accept) input.setAttribute('accept', options.accept);
+  input.type = 'file';
+  input.name = options.fieldName;
+  exports.css(input, styles);
+
+  // enlarge the file input button
+  if (typeof input.style.transform == 'string'){
+    input.style.transform = "scale(30)";
+    input.style.transformOrigin = "99% 50%";
+  }
+  else {
+    if (typeof input.style.msTransform == 'string'){
+      // fix IE9, IE10 double click to open window problem, because
+      // IE only the file input button could use, the value input is double click required
+      input.style.msTransform = "scale(30)";
+      input.style.msTransformOrigin = "99% 50%";
+    }
+    else if (typeof input.style.webkitTransform == 'string') {
+      input.style.webkitTransform = "scale(30)";
+      input.style.webkitTransformOrigin = "99% 50%";
+    }
+    else if (typeof input.mozTransform == 'string') {
+      input.style.mozTransform = "scale(30)";
+      input.style.mozTransformOrigin = '99% 50%';
+    }
+    else {
+      input.style.fontSize = '208px';
+    }
+  }
+
+  return input;
+};
+},{"./support":86}],88:[function(require,module,exports){
+
+/**
+ * Expose `Emitter`.
+ */
+
+module.exports = Emitter;
+
+/**
+ * Initialize a new `Emitter`.
+ *
+ * @api public
+ */
+
+function Emitter(obj) {
+  if (obj) return mixin(obj);
+};
+
+/**
+ * Mixin the emitter properties.
+ *
+ * @param {Object} obj
+ * @return {Object}
+ * @api private
+ */
+
+function mixin(obj) {
+  for (var key in Emitter.prototype) {
+    obj[key] = Emitter.prototype[key];
+  }
+  return obj;
+}
+
+/**
+ * Listen on the given `event` with `fn`.
+ *
+ * @param {String} event
+ * @param {Function} fn
+ * @return {Emitter}
+ * @api public
+ */
+
+Emitter.prototype.on =
+Emitter.prototype.addEventListener = function(event, fn){
+  this._callbacks = this._callbacks || {};
+  (this._callbacks['$' + event] = this._callbacks['$' + event] || [])
+    .push(fn);
+  return this;
+};
+
+/**
+ * Adds an `event` listener that will be invoked a single
+ * time then automatically removed.
+ *
+ * @param {String} event
+ * @param {Function} fn
+ * @return {Emitter}
+ * @api public
+ */
+
+Emitter.prototype.once = function(event, fn){
+  function on() {
+    this.off(event, on);
+    fn.apply(this, arguments);
+  }
+
+  on.fn = fn;
+  this.on(event, on);
+  return this;
+};
+
+/**
+ * Remove the given callback for `event` or all
+ * registered callbacks.
+ *
+ * @param {String} event
+ * @param {Function} fn
+ * @return {Emitter}
+ * @api public
+ */
+
+Emitter.prototype.off =
+Emitter.prototype.removeListener =
+Emitter.prototype.removeAllListeners =
+Emitter.prototype.removeEventListener = function(event, fn){
+  this._callbacks = this._callbacks || {};
+
+  // all
+  if (0 == arguments.length) {
+    this._callbacks = {};
+    return this;
+  }
+
+  // specific event
+  var callbacks = this._callbacks['$' + event];
+  if (!callbacks) return this;
+
+  // remove all handlers
+  if (1 == arguments.length) {
+    delete this._callbacks['$' + event];
+    return this;
+  }
+
+  // remove specific handler
+  var cb;
+  for (var i = 0; i < callbacks.length; i++) {
+    cb = callbacks[i];
+    if (cb === fn || cb.fn === fn) {
+      callbacks.splice(i, 1);
+      break;
+    }
+  }
+  return this;
+};
+
+/**
+ * Emit `event` with the given args.
+ *
+ * @param {String} event
+ * @param {Mixed} ...
+ * @return {Emitter}
+ */
+
+Emitter.prototype.emit = function(event){
+  this._callbacks = this._callbacks || {};
+  var args = [].slice.call(arguments, 1)
+    , callbacks = this._callbacks['$' + event];
+
+  if (callbacks) {
+    callbacks = callbacks.slice(0);
+    for (var i = 0, len = callbacks.length; i < len; ++i) {
+      callbacks[i].apply(this, args);
+    }
+  }
+
+  return this;
+};
+
+/**
+ * Return array of callbacks for `event`.
+ *
+ * @param {String} event
+ * @return {Array}
+ * @api public
+ */
+
+Emitter.prototype.listeners = function(event){
+  this._callbacks = this._callbacks || {};
+  return this._callbacks['$' + event] || [];
+};
+
+/**
+ * Check if this emitter has `event` handlers.
+ *
+ * @param {String} event
+ * @return {Boolean}
+ * @api public
+ */
+
+Emitter.prototype.hasListeners = function(event){
+  return !! this.listeners(event).length;
+};
+
+},{}],89:[function(require,module,exports){
 module.exports = function(el){
 
     var ids = {};
@@ -13990,9 +14569,9 @@ module.exports = function(el){
 
 }
 
-},{}],81:[function(require,module,exports){
+},{}],90:[function(require,module,exports){
 arguments[4][7][0].apply(exports,arguments)
-},{"dup":7}],82:[function(require,module,exports){
+},{"dup":7}],91:[function(require,module,exports){
 var Buffer = Buffer;
 
 var types = [
@@ -14279,7 +14858,7 @@ Buffers.prototype.toString = function(encoding, start, end) {
     return this.slice(start, end).toString(encoding);
 }
 
-},{}],83:[function(require,module,exports){
+},{}],92:[function(require,module,exports){
 // handles audio files and raw, mono, audio buffers
 
 module.exports = function(context, buff, cb){
@@ -14328,7 +14907,7 @@ module.exports = function(context, buff, cb){
   }
 }
 
-},{}],84:[function(require,module,exports){
+},{}],93:[function(require,module,exports){
 var Resample = require('./resampler.js')
 var shift = require('pitch-shift')
 var jbuffers = require('jbuffers')
@@ -14428,7 +15007,7 @@ function mergeTracks(tracks, a){
   return track
 }
 
-},{"./resampler.js":85,"jbuffers":82,"pitch-shift":115}],85:[function(require,module,exports){
+},{"./resampler.js":94,"jbuffers":91,"pitch-shift":124}],94:[function(require,module,exports){
 //JavaScript Audio Resampler (c) 2011 - Grant Galitz
 module.exports = Resampler
 
@@ -14641,7 +15220,7 @@ Resampler.prototype.initializeBuffers = function () {
 	}
 }
 
-},{}],86:[function(require,module,exports){
+},{}],95:[function(require,module,exports){
 module.exports = function(opts){
 
   var ctx = opts.canvas.getContext('2d');
@@ -14757,7 +15336,7 @@ function avg(opts){
     return results 
 }
 
-},{}],87:[function(require,module,exports){
+},{}],96:[function(require,module,exports){
 // Source: http://jsfiddle.net/vWx8V/
 // http://stackoverflow.com/questions/5603195/full-list-of-javascript-keycodes
 
@@ -14906,31 +15485,13 @@ for (var alias in aliases) {
   codes[alias] = aliases[alias]
 }
 
-},{}],88:[function(require,module,exports){
+},{}],97:[function(require,module,exports){
 arguments[4][27][0].apply(exports,arguments)
-},{"dup":27}],89:[function(require,module,exports){
+},{"dup":27}],98:[function(require,module,exports){
 arguments[4][28][0].apply(exports,arguments)
-},{"./lib/fft-matrix.js":90,"cwise":91,"dup":28,"ndarray":106,"ndarray-ops":99,"typedarray-pool":98}],90:[function(require,module,exports){
+},{"./lib/fft-matrix.js":99,"cwise":100,"dup":28,"ndarray":115,"ndarray-ops":108,"typedarray-pool":107}],99:[function(require,module,exports){
 arguments[4][29][0].apply(exports,arguments)
-},{"bit-twiddle":88,"dup":29}],91:[function(require,module,exports){
-arguments[4][30][0].apply(exports,arguments)
-},{"./lib/parser.js":93,"./lib/shim.js":94,"dup":30}],92:[function(require,module,exports){
-arguments[4][31][0].apply(exports,arguments)
-},{"dup":31}],93:[function(require,module,exports){
-arguments[4][32][0].apply(exports,arguments)
-},{"dup":32,"falafel":95}],94:[function(require,module,exports){
-arguments[4][33][0].apply(exports,arguments)
-},{"./generate.js":92,"dup":33}],95:[function(require,module,exports){
-arguments[4][34][0].apply(exports,arguments)
-},{"dup":34,"esprima":96}],96:[function(require,module,exports){
-arguments[4][35][0].apply(exports,arguments)
-},{"dup":35}],97:[function(require,module,exports){
-arguments[4][36][0].apply(exports,arguments)
-},{"dup":36}],98:[function(require,module,exports){
-arguments[4][37][0].apply(exports,arguments)
-},{"bit-twiddle":88,"dup":37}],99:[function(require,module,exports){
-arguments[4][38][0].apply(exports,arguments)
-},{"cwise":100,"dup":38,"ndarray":106}],100:[function(require,module,exports){
+},{"bit-twiddle":97,"dup":29}],100:[function(require,module,exports){
 arguments[4][30][0].apply(exports,arguments)
 },{"./lib/parser.js":102,"./lib/shim.js":103,"dup":30}],101:[function(require,module,exports){
 arguments[4][31][0].apply(exports,arguments)
@@ -14943,26 +15504,52 @@ arguments[4][34][0].apply(exports,arguments)
 },{"dup":34,"esprima":105}],105:[function(require,module,exports){
 arguments[4][35][0].apply(exports,arguments)
 },{"dup":35}],106:[function(require,module,exports){
-arguments[4][45][0].apply(exports,arguments)
-},{"./lib/tools.js":107,"./lib/viewn.js":108,"dup":45}],107:[function(require,module,exports){
-arguments[4][46][0].apply(exports,arguments)
-},{"dup":46}],108:[function(require,module,exports){
-arguments[4][47][0].apply(exports,arguments)
-},{"./tools.js":107,"dup":47}],109:[function(require,module,exports){
-arguments[4][48][0].apply(exports,arguments)
-},{"bit-twiddle":88,"dup":48,"ndarray":106,"ndarray-fft":89,"ndarray-ops":99,"typedarray-pool":114}],110:[function(require,module,exports){
-arguments[4][49][0].apply(exports,arguments)
-},{"dup":49}],111:[function(require,module,exports){
-arguments[4][50][0].apply(exports,arguments)
-},{"dup":50}],112:[function(require,module,exports){
-arguments[4][27][0].apply(exports,arguments)
-},{"dup":27}],113:[function(require,module,exports){
 arguments[4][36][0].apply(exports,arguments)
-},{"dup":36}],114:[function(require,module,exports){
+},{"dup":36}],107:[function(require,module,exports){
+arguments[4][37][0].apply(exports,arguments)
+},{"bit-twiddle":97,"dup":37}],108:[function(require,module,exports){
+arguments[4][38][0].apply(exports,arguments)
+},{"cwise":109,"dup":38,"ndarray":115}],109:[function(require,module,exports){
+arguments[4][30][0].apply(exports,arguments)
+},{"./lib/parser.js":111,"./lib/shim.js":112,"dup":30}],110:[function(require,module,exports){
+arguments[4][31][0].apply(exports,arguments)
+},{"dup":31}],111:[function(require,module,exports){
+arguments[4][32][0].apply(exports,arguments)
+},{"dup":32,"falafel":113}],112:[function(require,module,exports){
+arguments[4][33][0].apply(exports,arguments)
+},{"./generate.js":110,"dup":33}],113:[function(require,module,exports){
+arguments[4][34][0].apply(exports,arguments)
+},{"dup":34,"esprima":114}],114:[function(require,module,exports){
+arguments[4][35][0].apply(exports,arguments)
+},{"dup":35}],115:[function(require,module,exports){
+arguments[4][45][0].apply(exports,arguments)
+},{"./lib/tools.js":116,"./lib/viewn.js":117,"dup":45}],116:[function(require,module,exports){
+arguments[4][46][0].apply(exports,arguments)
+},{"dup":46}],117:[function(require,module,exports){
+arguments[4][47][0].apply(exports,arguments)
+},{"./tools.js":116,"dup":47}],118:[function(require,module,exports){
+arguments[4][48][0].apply(exports,arguments)
+},{"bit-twiddle":97,"dup":48,"ndarray":115,"ndarray-fft":98,"ndarray-ops":108,"typedarray-pool":123}],119:[function(require,module,exports){
+arguments[4][49][0].apply(exports,arguments)
+},{"dup":49}],120:[function(require,module,exports){
+arguments[4][50][0].apply(exports,arguments)
+},{"dup":50}],121:[function(require,module,exports){
+arguments[4][27][0].apply(exports,arguments)
+},{"dup":27}],122:[function(require,module,exports){
+arguments[4][36][0].apply(exports,arguments)
+},{"dup":36}],123:[function(require,module,exports){
 arguments[4][53][0].apply(exports,arguments)
-},{"bit-twiddle":112,"dup":53}],115:[function(require,module,exports){
+},{"bit-twiddle":121,"dup":53}],124:[function(require,module,exports){
 arguments[4][54][0].apply(exports,arguments)
-},{"detect-pitch":109,"dup":54,"frame-hop":110,"overlap-add":111,"typedarray-pool":114}],116:[function(require,module,exports){
+},{"detect-pitch":118,"dup":54,"frame-hop":119,"overlap-add":120,"typedarray-pool":123}],125:[function(require,module,exports){
+arguments[4][80][0].apply(exports,arguments)
+},{"dezalgo":126,"dup":80}],126:[function(require,module,exports){
+arguments[4][81][0].apply(exports,arguments)
+},{"asap":127,"dup":81,"wrappy":128}],127:[function(require,module,exports){
+arguments[4][82][0].apply(exports,arguments)
+},{"_process":10,"dup":82}],128:[function(require,module,exports){
+arguments[4][83][0].apply(exports,arguments)
+},{"dup":83}],129:[function(require,module,exports){
 //     uuid.js
 //
 //     Copyright (c) 2010-2012 Robert Kieffer
@@ -15211,7 +15798,7 @@ arguments[4][54][0].apply(exports,arguments)
   }
 }).call(this);
 
-},{}],117:[function(require,module,exports){
+},{}],130:[function(require,module,exports){
 /**
  * Merge object b with object a.
  *
@@ -15236,7 +15823,7 @@ exports = module.exports = function(a, b){
   return a;
 };
 
-},{}],118:[function(require,module,exports){
+},{}],131:[function(require,module,exports){
 var touchy = require('./touchy.js')
 ,   uuid = require('node-uuid')
 ,   merge = require('utils-merge')
@@ -15491,7 +16078,7 @@ touch.prototype.handleMouse = function(x){
 
 
 
-},{"./touchy.js":119,"node-uuid":116,"utils-merge":117}],119:[function(require,module,exports){
+},{"./touchy.js":132,"node-uuid":129,"utils-merge":130}],132:[function(require,module,exports){
 /* Modernizr 2.6.2 (Custom Build) | MIT & BSD
  * Build: http://modernizr.com/download/#-touch-teststyles-prefixes
  */
@@ -16234,7 +16821,7 @@ Touchy.startWindowBounce = function () {
 
 module.exports = Touchy;
 
-},{}],120:[function(require,module,exports){
+},{}],133:[function(require,module,exports){
 "use strict";
 /* jshint esnext: false */
 
@@ -16401,7 +16988,7 @@ function encoder() {
 encoder.self = encoder.util = self;
 
 module.exports = encoder;
-},{}],121:[function(require,module,exports){
+},{}],134:[function(require,module,exports){
 "use strict";
 
 var _interopRequire = function (obj) { return obj && obj.__esModule ? obj["default"] : obj; };
@@ -16497,7 +17084,7 @@ var Encoder = (function () {
 })();
 
 module.exports = Encoder;
-},{"./encoder-worker":120,"inline-worker":123}],122:[function(require,module,exports){
+},{"./encoder-worker":133,"inline-worker":136}],135:[function(require,module,exports){
 "use strict";
 
 var _interopRequire = function (obj) { return obj && obj.__esModule ? obj["default"] : obj; };
@@ -16505,11 +17092,11 @@ var _interopRequire = function (obj) { return obj && obj.__esModule ? obj["defau
 var Encoder = _interopRequire(require("./encoder"));
 
 module.exports = Encoder;
-},{"./encoder":121}],123:[function(require,module,exports){
+},{"./encoder":134}],136:[function(require,module,exports){
 "use strict";
 
 module.exports = require("./inline-worker");
-},{"./inline-worker":124}],124:[function(require,module,exports){
+},{"./inline-worker":137}],137:[function(require,module,exports){
 (function (global){
 "use strict";
 
@@ -16561,7 +17148,7 @@ var InlineWorker = (function () {
 
 module.exports = InlineWorker;
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],125:[function(require,module,exports){
+},{}],138:[function(require,module,exports){
 var Resample = require('./resampler.js')
 var shift = require('pitch-shift')
 var jbuffers = require('jbuffers')
@@ -16662,9 +17249,9 @@ function mergeTracks(tracks, a){
   return track
 }
 
-},{"./resampler.js":126,"jbuffers":82,"pitch-shift":115}],126:[function(require,module,exports){
-arguments[4][85][0].apply(exports,arguments)
-},{"dup":85}],127:[function(require,module,exports){
+},{"./resampler.js":139,"jbuffers":91,"pitch-shift":124}],139:[function(require,module,exports){
+arguments[4][94][0].apply(exports,arguments)
+},{"dup":94}],140:[function(require,module,exports){
 var buffers = require('jbuffers')
 var through = require('through2')
 var jsynth = require('../jsynth')
@@ -16839,11 +17426,11 @@ module.exports = function(master, _buffer, cb, size){
 
 
 
-},{"../jsynth":140,"jbuffers":128,"through2":139}],128:[function(require,module,exports){
-arguments[4][82][0].apply(exports,arguments)
-},{"dup":82}],129:[function(require,module,exports){
+},{"../jsynth":153,"jbuffers":141,"through2":152}],141:[function(require,module,exports){
+arguments[4][91][0].apply(exports,arguments)
+},{"dup":91}],142:[function(require,module,exports){
 arguments[4][12][0].apply(exports,arguments)
-},{"./_stream_readable":130,"./_stream_writable":132,"_process":10,"core-util-is":133,"dup":12,"inherits":134}],130:[function(require,module,exports){
+},{"./_stream_readable":143,"./_stream_writable":145,"_process":10,"core-util-is":146,"dup":12,"inherits":147}],143:[function(require,module,exports){
 (function (process){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -17829,7 +18416,7 @@ function indexOf (xs, x) {
 }
 
 }).call(this,require('_process'))
-},{"_process":10,"buffer":2,"core-util-is":133,"events":6,"inherits":134,"isarray":135,"stream":22,"string_decoder/":136}],131:[function(require,module,exports){
+},{"_process":10,"buffer":2,"core-util-is":146,"events":6,"inherits":147,"isarray":148,"stream":22,"string_decoder/":149}],144:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -18041,7 +18628,7 @@ function done(stream, er) {
   return stream.push(null);
 }
 
-},{"./_stream_duplex":129,"core-util-is":133,"inherits":134}],132:[function(require,module,exports){
+},{"./_stream_duplex":142,"core-util-is":146,"inherits":147}],145:[function(require,module,exports){
 (function (process){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -18431,17 +19018,17 @@ function endWritable(stream, state, cb) {
 }
 
 }).call(this,require('_process'))
-},{"./_stream_duplex":129,"_process":10,"buffer":2,"core-util-is":133,"inherits":134,"stream":22}],133:[function(require,module,exports){
+},{"./_stream_duplex":142,"_process":10,"buffer":2,"core-util-is":146,"inherits":147,"stream":22}],146:[function(require,module,exports){
 arguments[4][17][0].apply(exports,arguments)
-},{"buffer":2,"dup":17}],134:[function(require,module,exports){
+},{"buffer":2,"dup":17}],147:[function(require,module,exports){
 arguments[4][7][0].apply(exports,arguments)
-},{"dup":7}],135:[function(require,module,exports){
+},{"dup":7}],148:[function(require,module,exports){
 arguments[4][8][0].apply(exports,arguments)
-},{"dup":8}],136:[function(require,module,exports){
+},{"dup":8}],149:[function(require,module,exports){
 arguments[4][23][0].apply(exports,arguments)
-},{"buffer":2,"dup":23}],137:[function(require,module,exports){
+},{"buffer":2,"dup":23}],150:[function(require,module,exports){
 arguments[4][20][0].apply(exports,arguments)
-},{"./lib/_stream_transform.js":131,"dup":20}],138:[function(require,module,exports){
+},{"./lib/_stream_transform.js":144,"dup":20}],151:[function(require,module,exports){
 module.exports = extend
 
 function extend() {
@@ -18460,7 +19047,7 @@ function extend() {
     return target
 }
 
-},{}],139:[function(require,module,exports){
+},{}],152:[function(require,module,exports){
 (function (process){
 var Transform = require('readable-stream/transform')
   , inherits  = require('util').inherits
@@ -18560,7 +19147,7 @@ module.exports.obj = through2(function (options, transform, flush) {
 })
 
 }).call(this,require('_process'))
-},{"_process":10,"readable-stream/transform":137,"util":25,"xtend":138}],140:[function(require,module,exports){
+},{"_process":10,"readable-stream/transform":150,"util":25,"xtend":151}],153:[function(require,module,exports){
 module.exports = function (context, fn, bufSize) {
 
     if (typeof context === 'function') {
@@ -18674,7 +19261,7 @@ function signed (n) {
     ;
 }
 
-},{}],141:[function(require,module,exports){
+},{}],154:[function(require,module,exports){
 var close = require('closeness')
 
 module.exports = function(node, points, fn){
@@ -18798,13 +19385,13 @@ function findPos(obj) {
   };
 };
 
-},{"closeness":142}],142:[function(require,module,exports){
+},{"closeness":155}],155:[function(require,module,exports){
 module.exports = function(num, dist){
 	return function(val){
 		return (Math.abs(num - val) < dist)
 	}
 };
-},{}],143:[function(require,module,exports){
+},{}],156:[function(require,module,exports){
 (function (process){
 var Stream = require('stream')
 
@@ -18916,7 +19503,7 @@ function through (write, end, opts) {
 
 
 }).call(this,require('_process'))
-},{"_process":10,"stream":22}],144:[function(require,module,exports){
+},{"_process":10,"stream":22}],157:[function(require,module,exports){
 (function (process){
 var through = require('through');
 var path = require('path');
@@ -19367,4 +19954,4 @@ function maybeCallback(cb) {
 
 
 }).call(this,require('_process'))
-},{"_process":10,"path":9,"through":143}]},{},[61]);
+},{"_process":10,"path":9,"through":156}]},{},[61]);
