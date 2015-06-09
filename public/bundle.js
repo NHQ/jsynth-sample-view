@@ -12327,7 +12327,7 @@ var _import = require('./import')
 var sampler = require('./')
 var master = new AudioContext
 var sample = undefined // selected sample
-var ctrls = "<div id=ctrls class=ctrlbox>\n  <button id=$play class=play>&gt</button>\n  <button id=$pause class=pause>||</button>\n  <button id=$playloop class=playloop>|&#8212&gt</button>\n  <button id=$loop class=loop><span style=\"font-size:100%;line-height:0\">&#9775</span></button>\n  <button id=$setIn class=setin>&#254&#8212</button>\n  <button id=$setOut class=\"setout reverse\"><span sytyle=\"font-size:300%\">&#254</span>&#8212</button>\n  <button id=$slice class=slice>8&lt--</button>\n  <button id=$reverse class=reverse>R</button>\n  <button id=$bpmchop class=bpmchop>chop(BPM)</button>\n  <button id=$xchop class=xchop>chop(x)&#8212&gt</button>\n  <input type=text id=$xchopval value=1>\n  <br />\n  <input type=range min=1 max=220 value=60 step=.1 id=bpm></input>\n  <input type=text id=bpmRange value=60>\n  <input type=range min=0 max=10 value=1 step=.1 id=amplitude></input>\n  <input type=text id=ampRange value=1>\n  <input type=range min=0 max=2 value=1 step=.01 id=speed></input>\n  <input type=text id=speedRange value=1>\n  <input type=range min=0 max=2 value=1 step=.01 id=pitch></input>\n  <input type=text id=pitchRange value=1>\n  <br />\n  <button id=save class=save>SAVE</button>\n  <button id=export class=export>EXPORT</button>\n  <button id=reset class=reset>RESET</button>\n  <button id=delete class=delete>DEL</button>\n</div>\n"
+var ctrls = "<div id=ctrls class=ctrlbox>\n  <button id=$play class=play>&gt</button>\n  <button id=$pause class=pause>||</button>\n  <button id=$playloop class=playloop>|&#8212&gt</button>\n  <button id=$loop class=loop><span style=\"font-size:100%;line-height:0\">&#9775</span></button>\n  <button id=$play class=play>&gt</button>\n  <button id=$pause class=pause>||</button>\n  <button id=$playloop class=playloop>|&#8212&gt</button>\n  <button id=$loop class=loop><span style=\"font-size:100%;line-height:0\">&#9775</span></button>\n  <button id=$setIn class=setin>&#254&#8212</button>\n  <button id=$setOut class=\"setout reverse\"><span sytyle=\"font-size:300%\">&#254</span>&#8212</button>\n  <button id=$slice class=slice>8&lt--</button>\n  <button id=$reverse class=reverse>R</button>\n  <button id=$bpmchop class=bpmchop>chop[bpm]</button>\n  <button id=$xchop class=xchop>chop[num]</button>\n  <input type=text id=$xchopval value=1>\n  <br />\n  <input type=range min=1 max=220 value=60 step=.1 id=bpm></input>\n  <input type=text id=bpmRange value=60>\n  <input type=range min=0 max=10 value=1 step=.1 id=amplitude></input>\n  <input type=text id=ampRange value=1>\n  <input type=range min=0 max=2 value=1 step=.01 id=speed></input>\n  <input type=text id=speedRange value=1>\n  <input type=range min=0 max=2 value=1 step=.01 id=pitch></input>\n  <input type=text id=pitchRange value=1>\n  <br />\n  <button id=save class=save>SAVE</button>\n  <button id=export class=export>EXPORT</button>\n  <button id=reset class=reset>RESET</button>\n  <button id=delete class=delete>DEL</button>\n</div>\n"
 var menu = "<div id=menubar class=menubox>\n  <button id=import class=import>import</button>\n  <input type=checkbox id=micline>\n  </input>\n  <label for=micline>line / mic</label>\n  <button id=record class=record>record</button>\n</div>\n"
 var samples = []
 var body = document.body 
@@ -12624,6 +12624,7 @@ function sampler (master, buff, parel, cb){
   parel = parel || document.body
   this.file = buff // try to keep original file around, maybe not 
   this.buff = buff
+  self.replaying = false
   self.parent = ui.sampletmp.cloneNode(true)
   parel.appendChild(self.parent)
   self.looping = false
@@ -12679,12 +12680,14 @@ function sampler (master, buff, parel, cb){
   }
 
   self.play = function(){
-    if(self.playing) {
+    if(self.playing && !self.replaying) {
+      self.replaying = true
       self.source.stop(0)
       self.source.disconnect()
       fireSample(self.mono, self.inPos)
     }
     if(self.paused){
+      self.replaying = false
       fireSample(self.mono, self.pauseStart)
     }
   }
@@ -12776,6 +12779,18 @@ function sampler (master, buff, parel, cb){
     fireSample(mono, 0, false)
   })
 */
+  function onePass(buf, pos){
+    streamBuff(master, buf, function(e, s){
+      s.play(pos)
+      s.connect(master.destination)
+      s.onended(function(){
+        s.disconnect()
+        console.log('ended')
+      })
+    })
+  }
+
+
   function fireSample(buf, pos, fire){
     pos = pos || 0
     self.inPos = pos
@@ -12792,6 +12807,7 @@ function sampler (master, buff, parel, cb){
       s.loopEnd = self.source.loopEnd || self.source.buffer.duration
       s.playbackRate= self.playbackRate
       s.onended = function(){
+      console.log('emded')
         s.disconnect()
         self.playing = false
         self.paused = true
@@ -12809,6 +12825,7 @@ function sampler (master, buff, parel, cb){
         self.reverse()
       }
       if(!(fire === false)) {
+        self.replaying = false
         s.connect(master.destination)
         s.start(0, pos)
       }
@@ -17298,6 +17315,7 @@ module.exports = function(master, _buffer, cb, size){
         var np = source._loopStart * source._playbackRate
         var dif = source._loopEnd - np
         pbroffset = 0//-source._loopEnd - source._loopStart //0//-Math.floor(dif)
+        total = 0;
         s = Math.floor(source._loopStart / source._playbackRate)//xx - pbroffset // / source._playbackRate) 
        // t = s / sr 
         source.resetIndex(s)

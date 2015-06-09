@@ -76,7 +76,7 @@ body{
   width:20%;
 }
 .ctrlbox button, .ctrlbox input[type=text]{
-  height: 20%;
+  height: 15%;
   margin: 0;
   flex: 1 1 25%;
   display:inline-block;

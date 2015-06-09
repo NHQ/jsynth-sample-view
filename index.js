@@ -63,6 +63,7 @@ function sampler (master, buff, parel, cb){
   parel = parel || document.body
   this.file = buff // try to keep original file around, maybe not 
   this.buff = buff
+  self.replaying = false
   self.parent = ui.sampletmp.cloneNode(true)
   parel.appendChild(self.parent)
   self.looping = false
@@ -118,12 +119,14 @@ function sampler (master, buff, parel, cb){
   }
 
   self.play = function(){
-    if(self.playing) {
+    if(self.playing && !self.replaying) {
+      self.replaying = true
       self.source.stop(0)
       self.source.disconnect()
       fireSample(self.mono, self.inPos)
     }
     if(self.paused){
+      self.replaying = false
       fireSample(self.mono, self.pauseStart)
     }
   }
@@ -215,6 +218,18 @@ function sampler (master, buff, parel, cb){
     fireSample(mono, 0, false)
   })
 */
+  function onePass(buf, pos){
+    streamBuff(master, buf, function(e, s){
+      s.play(pos)
+      s.connect(master.destination)
+      s.onended(function(){
+        s.disconnect()
+        console.log('ended')
+      })
+    })
+  }
+
+
   function fireSample(buf, pos, fire){
     pos = pos || 0
     self.inPos = pos
@@ -231,6 +246,7 @@ function sampler (master, buff, parel, cb){
       s.loopEnd = self.source.loopEnd || self.source.buffer.duration
       s.playbackRate= self.playbackRate
       s.onended = function(){
+      console.log('emded')
         s.disconnect()
         self.playing = false
         self.paused = true
@@ -248,6 +264,7 @@ function sampler (master, buff, parel, cb){
         self.reverse()
       }
       if(!(fire === false)) {
+        self.replaying = false
         s.connect(master.destination)
         s.start(0, pos)
       }
