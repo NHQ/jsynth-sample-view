@@ -3,20 +3,10 @@
   <button id=$pause class=pause>||</button>
   <button id=$playloop class=playloop>|&#8212&gt</button>
   <button id=$loop class=loop><span style="font-size:100%;line-height:0">&#9775</span></button>
-  <button id=$play class=play>&gt</button>
-  <button id=$pause class=pause>||</button>
-  <button id=$playloop class=playloop>|&#8212&gt</button>
-  <button id=$loop class=loop><span style="font-size:100%;line-height:0">&#9775</span></button>
   <button id=$setIn class=setin>&#254&#8212</button>
   <button id=$setOut class="setout reverse"><span sytyle="font-size:300%">&#254</span>&#8212</button>
   <button id=$slice class=slice>8&lt--</button>
   <button id=$reverse class=reverse>R</button>
-  <button id=$bpmchop class=bpmchop>chop[bpm]</button>
-  <button id=$xchop class=xchop>chop[num]</button>
-  <input type=text id=$xchopval value=1>
-  <br />
-  <input type=range min=1 max=220 value=60 step=.1 id=bpm></input>
-  <input type=text id=bpmRange value=60>
   <input type=range min=0 max=10 value=1 step=.1 id=amplitude></input>
   <input type=text id=ampRange value=1>
   <input type=range min=0 max=2 value=1 step=.01 id=speed></input>
@@ -28,4 +18,9 @@
   <button id=export class=export>EXPORT</button>
   <button id=reset class=reset>RESET</button>
   <button id=delete class=delete>DEL</button>
+  <input type=text id=title class=title placeholder="track title">
+  <br />
+  <br />
+  <input type=text id=tags class=tags placeholder="comma separated tags">
+  <input type=textarea id=title class=title placeholder="track title">
 </div>

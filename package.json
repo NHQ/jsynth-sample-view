@@ -23,6 +23,7 @@
     "brfs": "^1.4.0",
     "ciseaux": "^0.1.9",
     "concat-stream": "^1.4.8",
+    "content-addressable-blob-store": "^4.2.1",
     "doc-ready": "^1.0.3",
     "dom-event": "0.0.5",
     "drag-drop": "^2.1.0",

@@ -19,7 +19,7 @@ var _import = require('./import')
 var sampler = require('./')
 var master = new AudioContext
 var sample = undefined // selected sample
-var ctrls = fs.readFileSync('./controls.html', 'utf8')
+var ctrls = fs.readFileSync('./lite_controls.html', 'utf8')
 var menu = fs.readFileSync('./menubar.html', 'utf8')
 var samples = []
 var body = document.body 
@@ -71,15 +71,9 @@ ready(function(){
     ui.pitch.value = parseFloat(e.target.value)
     sample.setPitch(parseFloat(e.target.value))
   })
-  on(ui.bpmRange, 'input', function(e){
-    ui.bpm.value = parseFloat(e.target.value)
-  })
   on(ui.ampRange, 'input', function(e){
     ui.amplitude.value = parseFloat(e.target.value)
     sample.amplitude(parseFloat(e.target.value))
-  })
-  on(ui.bpm, 'input', function(e){
-    ui.bpmRange.value = ui.bpmRange.textContent = e.target.valueAsNumber
   })
   on(ui.amplitude, 'input', function(e){
     sample.amplitude(e.target.valueAsNumber)
@@ -113,7 +107,7 @@ ready(function(){
     sample.pause()
 //    sample.emit('pause')
   })
-  on(ui.$xchop, 'touchdown', function(e){
+/*  on(ui.$xchop, 'touchdown', function(e){
     var n = parseInt(ui.$xchopval.value)
     sample.chop(n, function(e, chops){
       chops.forEach(function(e){
@@ -124,6 +118,7 @@ ready(function(){
         })
     })})
   })
+*/
   on(ui.$slice, 'touchdown', function(e){
     var cut = sample.slice()
     var params = sample.getParams()
