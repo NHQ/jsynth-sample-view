@@ -1,10 +1,11 @@
+Buffer = require('buffer/').Buffer
 var path = require('path')
 //var hboot = require('hyperboot/rpc')
 //hboot.toggle()
 var on = require('dom-event')
 var fs = require('fs')
-var nb = require('../nbfs') // note-bene
-nb.setStorage(5 * 1024 * 1024 * 1024)
+//var nb = require('../nbfs') // note-bene
+//nb.setStorage(5 * 1024 * 1024 * 1024)
 var uis = require('getids')
 var on = require('dom-event')
 var touchdown = require('touchdown')
@@ -19,7 +20,7 @@ var _import = require('./import')
 var sampler = require('./')
 var master = new AudioContext
 var sample = undefined // selected sample
-var ctrls = fs.readFileSync('./lite_controls.html', 'utf8')
+var ctrls = fs.readFileSync('./controls.html', 'utf8')
 var menu = fs.readFileSync('./menubar.html', 'utf8')
 var samples = []
 var body = document.body 
@@ -60,7 +61,7 @@ ready(function(){
     var buf = sample.slice()
     buf.name = sample.name
     dlblob(buf, master.sampleRate, true, function(e, a){
-      console.log(e, a)
+     // console.log(e, a)
     })
   })
   on(ui.speedRange, 'input', function(e){
@@ -122,15 +123,16 @@ ready(function(){
   on(ui.$slice, 'touchdown', function(e){
     var cut = sample.slice()
     var params = sample.getParams()
-    console.log(params)
+  //  console.log(params)
     cut = resample(master.sampleRate, cut, params)
-    console.log(cut)
+  //  console.log(cut)
     createSample([cut], function(_sample){
        
       samples.push(_sample)
     })
   })
   drop(body, function(files){
+   // console.log(files[0].path)
     files.forEach(function(e){
       var _sample = createSample(e.buffer, function(_sample){
         var n = files[0].name
@@ -152,7 +154,7 @@ ready(function(){
 function keydown(evt){
   var char = charcode(evt)
   if(evt.srcElement.tagName === 'INPUT') return
-  console.log(char)
+  //console.log(char)
   var timeIn = evt.timeStamp 
   switch (char){
     case 'i':
@@ -190,9 +192,9 @@ function createSample(buff, cb){
   div.setAttribute('tabIndex', samples.length + 1)
   document.body.appendChild(div)
   on(div, 'focus', function(){
-    console.log(this.tabIndex)
+    //console.log(this.tabIndex)
     sample = samples[this.tabIndex-1]
-    console.log(sample)
+    //console.log(sample)
   })
   if(Array.isArray(buff)){
     
