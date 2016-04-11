@@ -1,4 +1,4 @@
-var waveformer = require('jsynth-waveform');
+var waveformer = require('../jsynth-waveform');
 var installCanvas = require('./install-canvas')
 var emitter = require('events').EventEmitter
 var inherits = require('inherits')
