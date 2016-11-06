@@ -12,6 +12,7 @@ module.exports = function(sr, buf, params){
     var buf = resample.resampler(buf)
     sr = params.sampleRate
   }
+
   
   if(!(params.pitch === 1) && params.pitch){
 
@@ -48,6 +49,10 @@ module.exports = function(sr, buf, params){
 //    var buf = resample.resampler(buf)
 //    sr = params.sampleRate
     buf = speed(buf, params.speed)
+  }
+
+  if(params.reverse){
+    buf = Array.prototype.reverse.call(buf)
   }
   
   return buf
