@@ -20,6 +20,8 @@ module.exports = function(buf, sampleRate, click, cb){
 
     a.rel = a.name = buf.name || 'untitled-track.wav'
     
+    a.innerText = a.rel
+    
     if(click) {
 
       var ev = new CustomEvent('click')

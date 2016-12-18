@@ -61,6 +61,7 @@ ready(function(){
     buf.name = sample.name
     dlblob(buf, master.sampleRate, true, function(e, a){
       console.log(e, a)
+      document.body.appendChild(a)
     })
   })
   on(ui.speedRange, 'input', function(e){
