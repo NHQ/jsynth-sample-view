@@ -9,7 +9,140 @@
     <link rel="stylesheet" href="site.css">
   </head>
   <body>
-    <div id="sampletmp" class="sample"></div>
-    <script type="text/javascript" src="bundle.js"></script>
+
+<!-- this is going in a sample-file list interface
+<div id=menubar class=menubox>
+  <div id=import class=import>import</div>
+  <div id=record class=record>record</div>
+  <div id=input class=input>input</div>
+</div>
+--!>
+<div id=$track class=timeline></div>
+<!--div id=$intervals class=intervals>
+  <div class="key"></div>
+  <div class="key prime"></div>
+  <div class="key"></div>
+  <div class="key prime"></div>
+  <div class="key"></div>
+  <div class="key"></div>
+  <div class="key prime"></div>
+  <div class="key"></div>
+  <div class="key prime"></div>
+  <div class="key"></div>
+  <div class="key prime"></div>
+  <div class="key"></div>
+  <div class="key"></div>
+  <div class="key prime"></div>
+  <div class="key"></div>
+  <div class="key prime"></div>
+  <div class="key"></div>
+  <div class="key"></div>
+  <div class="key prime"></div>
+  <div class="key"></div>
+  <div class="key prime"></div>
+  <div class="key"></div>
+  <div class="key prime"></div>
+  <div class="key"></div>
+  <div class="key"></div>
+  <div class="key prime"></div>
+  <div class="key"></div>
+  <div class="key prime"></div>
+  <div class="key"></div>
+  <div class="key"></div>
+  <div class="key prime"></div>
+  <div class="key"></div>
+  <div class="key prime"></div>
+  <div class="key"></div>
+  <div class="key prime"></div>
+  <div class="key"></div>
+  <div class="key"></div>
+  <div class="key prime"></div>
+  <div class="key"></div>
+  <div class="key prime"></div>
+  <div class="key"></div>
+  <div class="key"></div>
+  <div class="key prime"></div>
+  <div class="key"></div>
+  <div class="key prime"></div>
+  <div class="key"></div>
+  <div class="key prime"></div>
+  <div class="key"></div>
+</div-->
+<div id=ctrls class=ctrlbox>
+  <div id=$setBegin class=dial tabindex=1>|&lt—</div>
+  <div id=$begin class=button tabindex=1>&lt&lt</div>
+  <!--<div id=$reverse class=reverse>R</div>--!>
+  <div id=$record class=button>rec</div>
+  <div id=$play class=button>&gt</div>
+  <div id=$pause class=button tabindex=3>| |</div>
+  <div id=$slice class=button tabindex=2>8&lt--</div>
+  <div id=$setEnd class=dial>&#8212&gt|</div>
+
+</div>
+
+<div id=ctrls class=ctrlbox>
+  <div id=$clear class=button tabindex=2>clear</div>
+  <div id=$save class=button tabindex=1>save</div>
+  <div id=$phase class=dial tabindex=3>Ph</div>
+  <div id=$currentTime class=dial>T</div>
+  <div id=$pitch class=dial>Fq</div>
+  <div id=$speed class=dial>Sp</div>
+  <div id=$bpm class=bpmtap>BPM</div>
+
+</div>
+<div id="sampletmp" class="sample"></div>
+
+
+<div class=twoCol>
+  <div class=samples id=loopify>
+    <!--iframe src="http://localhost:11005" ></iframe-->
+  </div>
+  <div class=setPins>
+  <div class=left>
+    <div class=setIn data-unit=setIn></div>
+    <div class="speed" data-unit=speed></div>
+  </div>
+  <div class=center>
+    <div id=centerButton class=square></div>
+  </div>
+  <div class=right>
+    <div class=setOut id=$setOut></div>
+    <div class=pitch id=$pitch></div>
+  </div>
+  </div>
+</div>
+
+
+<!--  
+<div id=mods class=setPins>
+  <div class=left>
+    <div class=setIn data-unit=setIn></div>
+    <div class="speed" data-unit=speed></div>
+  </div>
+  <div class=center>
+    <div id=centerButton class=square></div>
+  </div>
+  <div class=right>
+    <div class=setOut id=$setOut></div>
+    <div class=pitch id=$pitch></div>
+  </div>
+</div>
+  
+<div id=mods class=other>
+  <input type=range min=0 max=10 value=1 step=.1 id=amplitude></input>
+  <input type=text id=ampRange value=1>
+  <input type=range min=0 max=2 value=1 step=.01 id=speed></input>
+  <input type=text id=speedRange value=1>
+  <input type=range min=0 max=2 value=1 step=.01 id=pitch></input>
+  <input type=text id=pitchRange value=1>
+  <br />
+  <div id=save class=save>SAVE</div>
+  <div id=export class=export>EXPORT</div>
+  <div id=reset class=reset>RESET</div>
+  <div id=delete class=delete>DEL</div>
+</div>
+-->
+
   </body>
+  <script src="bundle.js"></script>
 </html>

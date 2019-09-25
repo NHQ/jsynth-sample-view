@@ -1,12 +1,24 @@
 <div id=ctrls class=ctrlbox>
-  <button id=$play class=play>&gt</button>
-  <button id=$pause class=pause>||</button>
-  <button id=$playloop class=playloop>|&#8212&gt</button>
-  <button id=$loop class=loop><span style="font-size:100%;line-height:0">&#9775</span></button>
-  <button id=$setIn class=setin>&#254&#8212</button>
-  <button id=$setOut class="setout reverse"><span sytyle="font-size:300%">&#254</span>&#8212</button>
+  <button id=$begin class=begin>&lt&lt</button>
   <button id=$slice class=slice>8&lt--</button>
+  <button id=$pause class=pause>| |</button>
+  <button id=$play class=play>&gt</button>
+  <button id=$loop class=loop><p style="font-size:100%;line-height:0">&#9775</p></button>
+  <button id=$record class=record>rec</button>
   <button id=$reverse class=reverse>R</button>
+  <button id=$playloop class=playloop>|&#8212&gt</button>
+
+</div>
+
+<div id=mods class=setPins>
+  <button id=$setIn class=setin>&#254&#8212</button>
+  <div id=timetap class=square></div>
+  <button id=$setOut class="setout reverse"><span sytyle="font-size:300%">&#254</span>&#8212</button>
+  <button id=$speed class=setin>&#254&#8212</button>
+  <button id=$pitch class="setout reverse"><span sytyle="font-size:300%">&#254</span>&#8212</button>
+</div>
+
+<div id=mods class=ctrlbox>
   <input type=range min=0 max=10 value=1 step=.1 id=amplitude></input>
   <input type=text id=ampRange value=1>
   <input type=range min=0 max=2 value=1 step=.01 id=speed></input>
@@ -18,9 +30,4 @@
   <button id=export class=export>EXPORT</button>
   <button id=reset class=reset>RESET</button>
   <button id=delete class=delete>DEL</button>
-  <input type=text id=title class=title placeholder="track title">
-  <br />
-  <br />
-  <input type=text id=tags class=tags placeholder="comma separated tags">
-  <input type=textarea id=title class=title placeholder="track title">
 </div>

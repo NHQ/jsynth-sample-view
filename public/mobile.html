@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+      <meta charset="utf-8">
+      <meta name="description" content="">
+      <meta name="author" content="">
+      <title>sans titre</title>
+      <link rel="stylesheet" href="style.css">
+      <link rel="stylesheet" href="site.css">
+    </head>
+    <body>
+    <div class=app>
+      <div class=row>
+        <div id=$play class="button center tap">&gt</div>
+        <div id=$track class=timeline></div>
+        <div id=$record class="button center tap">rec</div>
+      </div>
+      <div id=ctrls class="row">
+        <div id=$setBegin class="button center tap" tabindex=1>in</div>
+        <div id=$begin class="button center tap" tabindex=1>&lt&lt</div>
+        <!--<div id=$reverse class=reverse>R</div>--!>
+        <div id=$record class="button center tap">rec</div>
+        <div id=$play class="button center tap">&gt</div>
+        <div id=$pause class="button center tap" tabindex=3>| |</div>
+        <div id=$slice class="button center tap key" tabindex=2>8&lt--</div>
+        <div id=$setEnd class="button center tap">&#8212&gt|</div>
+
+      </div>
+
+      <div class=row>
+        <fieldset id=vapeEffect>
+          <div class="toggle">
+            <label onclick="">
+              <input id="vapeInput" name="view2" type="radio"  checked>
+              <div class="switch">
+                <pre> A </pre>
+              </div>
+            </label>
+            <label onclick="">
+              <input id="vapeChop" name="view2" type="radio">
+              <div class="switch">
+                <pre> B </pre>
+              </div>
+            </label>
+            <a></a>
+          </div>
+        </fieldset>
+        <div class=col>
+          <input id=vapeRanger type=range min="-1" max="1" value="0" step=".01"></input>
+          <input id=vapeRanger type=range min="-1" max="1" value="0" step=".01"></input>
+        </div>
+        <div class="button center tap" id=vapeRangeReset>RESET</div>
+      </div>
+
+      <div class=row>
+        <fieldset id=vapeRangeMode>
+          <div class="toggle">
+            <label onclick="">
+              <input id="speed" name="view1" type="radio" checked>
+              <div class=switch>
+                <pre> ON </pre>
+              </div>
+            </label>
+
+            <label onclick="">
+              <input id="pitch" name="view1" type="radio">
+              <div class=switch>
+                <pre> OFF </pre>
+              </div>
+            </label>
+
+          <a></a>
+        </div>
+      </fieldset>
+        <div class=knob id=delay_chop></div>
+        <div class=knob id=mix_chop></div>
+        <div class=knob id=fb_chop></div>
+
+        <div class="button center tap" id=vapeRangeReset>CLEAR</div>
+      
+      </div>
+    <div class="row grow2">
+        <div class="key prime"></div>
+        <div class="key harmonic "></div>
+        <div class="key prime"></div>
+        <div class="key harmonic"></div>
+        <div class="key prime"></div>
+        <div class="key harmonic"></div>
+        <div class="key prime"></div>
+        <div class="key harmonic"></div>
+    </div>
+    <div class=row>  
+        <fieldset >
+          <div class="toggle">
+              <label onclick="">
+                <input id="chopReverse" name="view8" type="radio" >
+                <div class=switch>
+                  <pre> bwd </pre>
+                </div>
+              </label>
+
+              <label onclick="">
+                <input id="chopFwd" name="view8" type="radio" checked>
+                <div class=switch>
+                  <pre> fwd </pre>
+                </div>
+              </label>
+            <a></a>
+          </div>
+        </fieldset>
+      <div id=$intervals class="intervals">
+        <div class="key knob" id=chopInterval></div>
+        <div class="key harmonic prime"></div>
+        <div class="key harmonic "></div>
+        <div class="key prime"></div>
+        <div class="key harmonic"></div>
+        <div class="key prime"></div>
+        <div class="key harmonic"></div>
+        <div class="key prime"></div>
+      </div>
+    </div>
+    <div class=row>  
+        <fieldset >
+          <div class="toggle">
+              <label onclick="">
+                <input id="screwBack" name="view9" type="radio" >
+                <div class=switch>
+                  <pre> bwd </pre>
+                </div>
+              </label>
+
+              <label onclick="">
+                <input id="screwFwd" name="view9" type="radio" checked>
+                <div class=switch>
+                  <pre> fwd </pre>
+                </div>
+              </label>
+            <a></a>
+          </div>
+        </fieldset>
+      <div id=$intervals class="intervals">
+        <div class="key knob" id=screwInterval></div>
+        <div class="key harmonic prime"></div>
+        <div class="key harmonic "></div>
+        <div class="key prime"></div>
+        <div class="key harmonic "></div>
+
+        <div class="key knob" id=bpmMod></div>
+        <div class="key tap" id=bpmTap></div>
+      </div>
+    </div>
+      <div class=row>
+        <fieldset id=vapeEffect>
+          <div class="toggle">
+            <label onclick="">
+              <input id="vapeInput" name="view3" type="radio" checked >
+              <div class="switch">
+                <pre> ON </pre>
+              </div>
+            </label>
+            <label onclick="">
+              <input id="vapeChop" name="view3" type="radio">
+              <div class="switch ">
+                <pre> OFF </pre>
+              </div>
+            </label>
+            <a></a>
+          </div>
+        </fieldset>
+        <div class=col>
+          <input id=vapeRanger type=range min="-1" max="1" value="0" step=".01"></input>
+          <input id=vapeRanger type=range min="-1" max="1" value="0" step=".01"></input>
+        </div>
+        <div class="button center tap" id=vapeRangeReset>RESET</div>
+      </div>
+
+      <div class=row>
+        <fieldset id=vapeRangeMode>
+          <div class="toggle">
+            <label onclick="">
+              <input id="speed" name="view4" type="radio" checked>
+              <div class=switch>
+                <pre> ON </pre>
+              </div>
+            </label>
+
+            <label onclick="">
+              <input id="pitch" name="view4" type="radio">
+              <div class=switch>
+                <pre> OFF </pre>
+              </div>
+            </label>
+
+          <a></a>
+        </div>
+      </fieldset>
+        <div class=knob id=delay_track></div>
+        <div class=knob id=mix_track></div>
+        <div class=knob id=fb_track></div>
+
+        <div class="button center tap" id=vapeRangeReset>CLEAR</div>
+      
+      </div>
+    </div>
+  </body>
+  <script src="mobile.js"></script>
+</html>

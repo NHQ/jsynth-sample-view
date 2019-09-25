@@ -21,7 +21,9 @@ var ui = require('getids')(document.body)
 var chop = require('./chop')
 var loop = require('./loop')
 
-document.body.removeChild(ui.sampletmp)
+//document.body.removeChild(ui.sampletmp)
+const sampletmp = document.createElement('div')
+sampletmp.classList.add('sample')
 
 module.exports = sampler 
 
@@ -56,15 +58,16 @@ function sampler (master, buff, parel, cb){
 
   var pitchNode = pitcher(master, function(t){
     return pitchFn(t)
-  })
+  }, 256*2*2*2*2)
 
   function pitchFn(t){return self.pitch}
 
   parel = parel || document.body
+  self.parelWidth = parseFloat(window.getComputedStyle(parel).getPropertyValue('width'))
   this.file = buff // try to keep original file around, maybe not 
   this.buff = buff
   self.replaying = false
-  self.parent = ui.sampletmp.cloneNode(true)
+  self.parent = sampletmp.cloneNode(true)
   parel.appendChild(self.parent)
   self.looping = false
   self.playing = false
@@ -79,7 +82,7 @@ function sampler (master, buff, parel, cb){
     cb(null, chops)
   }
   self.getTime = function(){
-    return master.currentTime - self.startTime + self.inPos
+    return self.source.currentTime//master.currentTime - self.startTime + self.inPos
   }
   
   self.amplitude = function(x){
@@ -94,6 +97,12 @@ function sampler (master, buff, parel, cb){
       self.source.connect(pitchNode)
       pitchNode.connect(master.destination)
     }
+  }
+  self.connect = function(x){
+    self.source.connect(x)
+  }
+  self.disconnect = function(x){
+    self.source.disconnect()
   }
   self.speed = function(x){
     self.playbackRate = self.source.playbackRate = x
@@ -117,13 +126,18 @@ function sampler (master, buff, parel, cb){
     self.looping = aye
     self.source.loop = aye 
   }
-
-  self.play = function(){
+  self.screw = function(delta){
+    var t = self.getTime() + delta / self.playbackRate
+    self.source.resetTime(t)
+    self.source.resetIndex(Math.floor(t * master.sampleRate))
+    self.setIn()
+  }
+  self.play = function(time){
     if(self.playing && !self.replaying) {
       self.replaying = true
       self.source.stop(0)
       self.source.disconnect()
-      fireSample(self.mono, self.inPos)
+      fireSample(self.mono, time || self.inPos)
     }
     if(self.paused){
       self.replaying = false
@@ -160,10 +174,13 @@ function sampler (master, buff, parel, cb){
     return new Float32Array(self.source.getBuffer().buffer.slice(i * 4, o * 4))
   }
   self.setIn = function(){ 
-    self.paint.needles[1] = self.paint.needles[0]
-    self.source.loopStart = self.source.currentTime//epochlapsed + self.inPos//source.loopStart
-    self.inPos = self.source.loopStart
-    self.loopDuration = self.source.loopEnd - self.source.loopStart//epochlapsed//source.buffer.duration - source.loopStart
+    self.inPos = self.source.currentTime
+    if(self.looping) {
+      self.source.loopStart = self.source.currentTime//epochlapsed + self.inPos//source.loopStart
+      self.paint.needles[1] = self.paint.needles[0]
+      self.inPos = self.source.loopStart
+      self.loopDuration = self.source.loopEnd - self.source.loopStart//epochlapsed//source.buffer.duration - source.loopStart
+    }
     if(!(self.playing))self.paint.setNeedles()    
   }
   self.setOut = function(){ 
@@ -246,7 +263,7 @@ function sampler (master, buff, parel, cb){
       s.loopEnd = self.source.loopEnd || self.source.buffer.duration
       s.playbackRate= self.playbackRate
       s.onended = function(){
-      console.log('emded')
+        console.log('emded')
         s.disconnect()
         self.playing = false
         self.paused = true
@@ -342,9 +359,10 @@ function sampler (master, buff, parel, cb){
 
   function curseHandle  (evt){
     self.source.disconnect()
-     var x =  evt.detail.offsetX / self.parent.children[0].width * self.duration
+     var x =  evt.detail.offsetX / self.parelWidth* self.duration
     if(self.playing) {
       self.source.stop(0)
+      //self.source.start(0, x)
       fireSample(self.mono, x)
       self.paint.needles[0] = evt.detail.offsetX
       self.paint.setNeedles()    

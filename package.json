@@ -6,6 +6,7 @@
   "scripts": {
     "sassify": "csass",
     "prefix": "css-prefix",
+    "opa" : "opa -e mobile.js -o public/bundle.js -t brfs -d",
     "bundle": "browserify entry.js -t jsminifier | gzip >  dist/bundle.js ",
     "watch-yo-sass, bitch": "watch-sass sassfile.scss > dist/style.css",
     "watch-bundle": "watchify -e entry.js -o dist/bundle.js",
@@ -17,21 +18,23 @@
   "dependencies": {
     "abre": "^0.5.0",
     "archiver": "^0.14.4",
+    "argb": "^1.0.0",
     "audiodata": "0.0.2",
     "babelify": "^6.1.2",
-    "blob-to-buffer": "^1.2.3",
+    "blob-to-buffer": "^1.2.6",
     "brfs": "^1.4.0",
     "ciseaux": "^0.1.9",
     "concat-stream": "^1.4.8",
     "content-addressable-blob-store": "^4.2.1",
     "doc-ready": "^1.0.3",
     "dom-event": "0.0.5",
-    "drag-drop": "^2.1.0",
+    "drag-drop": "^2.14.0",
     "file-button": "^1.0.2",
     "frequency-viewer": "^0.1.0",
     "getids": "^0.2.0",
     "hyperboot": "^2.1.1",
     "inherits": "^2.0.1",
+    "insert-css": "^2.0.0",
     "jbuffers": "^1.3.0",
     "jsynth-file-sample": "^1.1.0",
     "jsynth-resampler": "0.0.0",
@@ -43,7 +46,8 @@
     "run-parallel": "^1.1.1",
     "touchdown": "^5.6.0",
     "wav-encoder": "^0.2.2",
-    "webworkify": "^1.0.2"
+    "webworkify": "^1.0.2",
+    "xhr": "^2.5.0"
   },
   "devDependencies": {
     "webworkify": "^1.0.2"

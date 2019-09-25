@@ -3,8 +3,8 @@ var path = require('path')
 //hboot.toggle()
 var on = require('dom-event')
 var fs = require('fs')
-var nb = require('../nbfs') // note-bene
-nb.setStorage(5 * 1024 * 1024 * 1024)
+//var nb = require('../nbfs') // note-bene
+//nb.setStorage(5 * 1024 * 1024 * 1024)
 var uis = require('getids')
 var on = require('dom-event')
 var touchdown = require('touchdown')
@@ -27,8 +27,8 @@ var body = document.body
 
 ready(function(){
   ctrls = ghost(ctrls)
-  body.appendChild(ctrls)
-  menu = ghost(menu)
+  body.appendChild(ctrls[0])
+  menu = ghost(menu)[0]
   body.appendChild(menu)
   var menui = uis(menu)
   filebutton.create({accept: 'audio/*'}).on('fileinput',function(input){
@@ -49,11 +49,11 @@ ready(function(){
   function ghost(html){
     var div = document.createElement('div')
     div.innerHTML = html
-    return div.firstChild
+    return div.children
   }
 
 
-  var ui = uis(ctrls)
+  var ui = uis(ctrls[0])
   var loop = 0 
   for(var el in ui) touchdown.start(ui[el])
   on(ui.export, 'touchdown', function(e){
